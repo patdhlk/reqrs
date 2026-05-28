@@ -1,6 +1,7 @@
 use std::fmt;
 
 #[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum ReqIfError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
@@ -33,6 +34,20 @@ pub struct SchemaWarning {
     pub context: Option<String>,
 }
 
+impl SchemaWarning {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            context: None,
+        }
+    }
+
+    pub fn with_context(mut self, context: impl Into<String>) -> Self {
+        self.context = Some(context.into());
+        self
+    }
+}
+
 impl fmt::Display for SchemaWarning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.context {
@@ -56,6 +71,12 @@ mod tests {
             format!("{w}"),
             "missing TYPE (while parsing SPEC-OBJECT REQ-001)"
         );
+    }
+
+    #[test]
+    fn schema_warning_display_without_context() {
+        let w = SchemaWarning::new("missing TYPE");
+        assert_eq!(format!("{w}"), "missing TYPE");
     }
 
     #[test]
