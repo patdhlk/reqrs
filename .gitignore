@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Internal design notes / specs — not committed
+docs/superpowers/

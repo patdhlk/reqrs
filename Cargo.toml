@@ -1,0 +1,21 @@
+[workspace]
+resolver = "3"
+members = ["crates/reqrs", "crates/reqrs-cli"]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/patdhlk/reqrs"
+
+[workspace.dependencies]
+quick-xml = "0.36"
+thiserror = "1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+rustc-hash = "2"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+pretty_assertions = "1"
+walkdir = "2"
+tempfile = "3"
+assert_cmd = "2"

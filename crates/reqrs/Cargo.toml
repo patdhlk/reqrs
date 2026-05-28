@@ -1,0 +1,19 @@
+[package]
+name = "reqrs"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ReqIF (Requirements Interchange Format) parsing/unparsing library"
+
+[dependencies]
+quick-xml.workspace = true
+thiserror.workspace = true
+zip.workspace = true
+chrono.workspace = true
+rustc-hash.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+walkdir.workspace = true
+tempfile.workspace = true
