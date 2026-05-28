@@ -1,7 +1,3 @@
-// Helpers below are consumed by downstream parser tasks; suppress dead-code
-// while the wiring is still being built up.
-#![allow(dead_code)]
-
 use crate::error::ReqIfError;
 use quick_xml::Reader;
 use quick_xml::events::{BytesEnd, BytesStart, Event};
@@ -12,6 +8,7 @@ pub(crate) struct ReqIfReader<'a> {
 }
 
 impl<'a> ReqIfReader<'a> {
+    #[allow(dead_code)]
     pub fn new(src: &'a [u8]) -> Self {
         let mut inner = Reader::from_reader(src);
         inner.config_mut().trim_text(false);
@@ -21,10 +18,13 @@ impl<'a> ReqIfReader<'a> {
         }
     }
 
+    // Consumed by parsers landing in later tasks (header, data_type, …).
+    #[allow(dead_code)]
     pub fn buffer_position(&self) -> usize {
         self.inner.buffer_position() as usize
     }
 
+    #[allow(dead_code)]
     pub fn read_event(&mut self) -> Result<Event<'_>, ReqIfError> {
         self.buf.clear();
         self.inner
@@ -37,6 +37,7 @@ impl<'a> ReqIfReader<'a> {
 
     /// Returns the text content of the current element (assumes the
     /// next event is Text or End). Reads until matching end tag.
+    #[allow(dead_code)]
     pub fn read_text_to_end(&mut self, end: &BytesEnd<'_>) -> Result<String, ReqIfError> {
         let name = end.name().as_ref().to_vec();
         let mut out = String::new();
@@ -70,6 +71,7 @@ impl<'a> ReqIfReader<'a> {
     }
 
     /// Skip events until the matching end tag for `start`.
+    #[allow(dead_code)]
     pub fn skip_to_end(&mut self, start: &BytesStart<'_>) -> Result<(), ReqIfError> {
         let name = start.name().as_ref().to_vec();
         let mut depth = 1usize;
@@ -102,6 +104,7 @@ impl<'a> ReqIfReader<'a> {
 }
 
 /// Look up a required attribute on a start event, returning a descriptive error otherwise.
+#[allow(dead_code)]
 pub(crate) fn required_attr(start: &BytesStart<'_>, name: &str) -> Result<String, ReqIfError> {
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == name.as_bytes() {
@@ -115,6 +118,7 @@ pub(crate) fn required_attr(start: &BytesStart<'_>, name: &str) -> Result<String
 }
 
 /// Look up an optional attribute on a start event.
+#[allow(dead_code)]
 pub(crate) fn optional_attr(start: &BytesStart<'_>, name: &str) -> Option<String> {
     start
         .attributes()
@@ -163,5 +167,43 @@ mod tests {
         r.skip_to_end(&start).unwrap();
         // After skipping the outer A, the next event is Eof.
         assert!(matches!(r.read_event().unwrap(), Event::Eof));
+    }
+
+    #[test]
+    fn optional_attr_returns_value_when_present() {
+        let xml = br#"<TAG NAME="x" OTHER="y"/>"#;
+        let mut r = ReqIfReader::new(xml);
+        let s = match r.read_event().unwrap() {
+            Event::Empty(s) => s.into_owned(),
+            _ => unreachable!(),
+        };
+        assert_eq!(optional_attr(&s, "NAME"), Some("x".to_string()));
+        assert_eq!(optional_attr(&s, "MISSING"), None);
+    }
+
+    #[test]
+    fn read_text_to_end_concatenates_text_and_cdata() {
+        let xml = b"<OUTER>hello <![CDATA[<world>]]>!</OUTER>";
+        let mut r = ReqIfReader::new(xml);
+        let end = match r.read_event().unwrap() {
+            Event::Start(s) => s.to_end().into_owned(),
+            _ => unreachable!(),
+        };
+        let text = r.read_text_to_end(&end).unwrap();
+        assert_eq!(text, "hello <world>!");
+    }
+
+    #[test]
+    fn buffer_position_advances_with_reads() {
+        let xml = b"<A/><B/>";
+        let mut r = ReqIfReader::new(xml);
+        let _ = r.read_event().unwrap();
+        let p1 = r.buffer_position();
+        let _ = r.read_event().unwrap();
+        let p2 = r.buffer_position();
+        assert!(
+            p2 > p1,
+            "buffer_position should advance, got p1={p1} p2={p2}"
+        );
     }
 }
