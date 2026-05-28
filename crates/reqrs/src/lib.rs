@@ -1,6 +1,21 @@
 #![forbid(unsafe_code)]
 
 //! reqrs — ReqIF parsing and unparsing in Rust.
+//!
+//! Byte-identical round-trip port of the Python `strict-doc-reqif` library.
+//! See the workspace `README.md` for the parity story and CLI usage.
+//!
+//! # Example
+//!
+//! ```no_run
+//! use reqrs::{ReqIfParser, ReqIfUnparser, FormatMode};
+//!
+//! # fn try_main() -> Result<(), Box<dyn std::error::Error>> {
+//! let bundle = ReqIfParser::parse_path("input.reqif")?;
+//! let xml = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough)?;
+//! std::fs::write("output.reqif", xml)?;
+//! # Ok(()) }
+//! ```
 
 pub mod commands;
 pub mod error;

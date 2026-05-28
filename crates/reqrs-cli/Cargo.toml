@@ -4,14 +4,18 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "CLI for reqrs — ReqIF parsing/unparsing"
+homepage = "https://github.com/patdhlk/reqrs"
+description = "CLI for reqrs — ReqIF (Requirements Interchange Format) passthrough, format, anonymize, dump, and validate subcommands"
+readme = "../../README.md"
+keywords = ["reqif", "requirements", "cli", "xml"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "reqrs"
 path = "src/main.rs"
 
 [dependencies]
-reqrs = { path = "../reqrs" }
+reqrs = { path = "../reqrs", version = "0.1.0" }
 clap.workspace = true
 anyhow.workspace = true
 
