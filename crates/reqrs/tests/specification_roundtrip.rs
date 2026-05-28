@@ -6,12 +6,13 @@
 //! enter at `level = 1` so their `<SPEC-HIERARCHY>` opens at 12 spaces.
 
 use pretty_assertions::assert_eq;
+use reqrs::FormatMode;
 use reqrs::parse::specification::parse_specification;
 use reqrs::unparse::specification::unparse_specification;
 
 fn round_trip(xml: &str) {
     let s = parse_specification(xml).unwrap();
-    let out = unparse_specification(&s);
+    let out = unparse_specification(&s, FormatMode::Passthrough);
     assert_eq!(out, xml, "round-trip mismatch");
 }
 

@@ -6,3 +6,4 @@
 //! these helpers rather than touching the raw strings directly.
 
 pub mod datetime;
+pub mod xhtml_indent;

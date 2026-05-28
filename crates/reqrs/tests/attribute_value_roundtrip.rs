@@ -6,14 +6,14 @@
 //! `unparse_attribute_value` and asserts byte-exact equality.
 
 use pretty_assertions::assert_eq;
-use reqrs::AttributeDefId;
 use reqrs::model::{AttributeValue, AttributeValueString};
 use reqrs::parse::attribute_value::parse_attribute_value;
 use reqrs::unparse::attribute_value::unparse_attribute_value;
+use reqrs::{AttributeDefId, FormatMode};
 
 fn round_trip(xml: &str) {
     let v = parse_attribute_value(xml).unwrap();
-    let out = unparse_attribute_value(&v);
+    let out = unparse_attribute_value(&v, FormatMode::Passthrough);
     assert_eq!(out, xml, "round-trip mismatch");
 }
 
@@ -119,7 +119,7 @@ fn attribute_value_with_comments_before_emits_at_12_space_indent() {
         value: "Section title".into(),
         comments_before: vec![" first comment ".into(), " second comment ".into()],
     });
-    let out = unparse_attribute_value(&av);
+    let out = unparse_attribute_value(&av, FormatMode::Passthrough);
     let expected = "            <!-- first comment -->\n            <!-- second comment -->\n            <ATTRIBUTE-VALUE-STRING THE-VALUE=\"Section title\">\n              <DEFINITION>\n                <ATTRIBUTE-DEFINITION-STRING-REF>AD-S</ATTRIBUTE-DEFINITION-STRING-REF>\n              </DEFINITION>\n            </ATTRIBUTE-VALUE-STRING>\n";
     assert_eq!(out, expected);
     assert_eq!(

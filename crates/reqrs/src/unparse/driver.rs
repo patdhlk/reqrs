@@ -27,10 +27,14 @@ use crate::unparse::spec_type::unparse_spec_type;
 use crate::unparse::specification::unparse_specification;
 use crate::unparse::writer::{FormatMode, escape_attr};
 
-/// Emit a full `<REQ-IF>` document. `mode` is currently unused — both
-/// `Passthrough` and `Canonical` go through the same path because the
-/// per-element unparsers consult their own `was_self_closing` flags.
-pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String, ReqIfError> {
+/// Emit a full `<REQ-IF>` document.
+///
+/// `mode` controls XHTML body whitespace reflow inside
+/// `<ATTRIBUTE-VALUE-XHTML>` blocks (see
+/// [`crate::unparse::attribute_value::unparse_attribute_value`]); all other
+/// structural decisions (self-closing forms, attribute ordering, etc.) are
+/// driven by per-element flags captured during parse.
+pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, ReqIfError> {
     let mut out = String::new();
 
     if bundle.namespace_info.doctype_is_present {
@@ -91,7 +95,7 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
                 } else {
                     out.push_str("      <SPEC-OBJECTS>\n");
                     for so in spec_objects {
-                        out.push_str(&unparse_spec_object(so));
+                        out.push_str(&unparse_spec_object(so, mode));
                     }
                     out.push_str("      </SPEC-OBJECTS>\n");
                 }
@@ -107,7 +111,7 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
                 } else {
                     out.push_str("      <SPEC-RELATIONS>\n");
                     for sr in spec_relations {
-                        out.push_str(&unparse_spec_relation(sr));
+                        out.push_str(&unparse_spec_relation(sr, mode));
                     }
                     out.push_str("      </SPEC-RELATIONS>\n");
                 }
@@ -123,7 +127,7 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
                 } else {
                     out.push_str("      <SPECIFICATIONS>\n");
                     for spec in specs {
-                        out.push_str(&unparse_specification(spec));
+                        out.push_str(&unparse_specification(spec, mode));
                     }
                     out.push_str("      </SPECIFICATIONS>\n");
                 }

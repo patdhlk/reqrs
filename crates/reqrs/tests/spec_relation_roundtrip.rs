@@ -5,12 +5,13 @@
 //! `<SOURCE>` / `<TARGET>` / `<VALUES>` at 10, inner refs at 12.
 
 use pretty_assertions::assert_eq;
+use reqrs::FormatMode;
 use reqrs::parse::spec_relation::parse_spec_relation;
 use reqrs::unparse::spec_relation::unparse_spec_relation;
 
 fn round_trip(xml: &str) {
     let sr = parse_spec_relation(xml).unwrap();
-    let out = unparse_spec_relation(&sr);
+    let out = unparse_spec_relation(&sr, FormatMode::Passthrough);
     assert_eq!(out, xml, "round-trip mismatch");
 }
 

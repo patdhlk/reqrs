@@ -20,13 +20,13 @@
 use crate::model::specification::{Specification, SpecificationChildTag};
 use crate::unparse::attribute_value::unparse_attribute_value;
 use crate::unparse::spec_hierarchy::unparse_spec_hierarchy;
-use crate::unparse::writer::{write_close, write_open, write_self_closing};
+use crate::unparse::writer::{FormatMode, write_close, write_open, write_self_closing};
 
 const INDENT: &str = "        "; // 8 spaces
 const CHILD_INDENT: &str = "          "; // 10 spaces
 const REF_INDENT: &str = "            "; // 12 spaces
 
-pub fn unparse_specification(s: &Specification) -> String {
+pub fn unparse_specification(s: &Specification, mode: FormatMode) -> String {
     let mut out = String::new();
     let mut attrs = collect_attrs(s);
 
@@ -61,7 +61,7 @@ pub fn unparse_specification(s: &Specification) -> String {
         match tag {
             SpecificationChildTag::Type => emit_type(&mut out, s),
             SpecificationChildTag::Children => emit_children(&mut out, s),
-            SpecificationChildTag::Values => emit_values(&mut out, s),
+            SpecificationChildTag::Values => emit_values(&mut out, s, mode),
         }
     }
 
@@ -122,7 +122,7 @@ fn emit_children(out: &mut String, s: &Specification) {
     out.push_str("</CHILDREN>\n");
 }
 
-fn emit_values(out: &mut String, s: &Specification) {
+fn emit_values(out: &mut String, s: &Specification, mode: FormatMode) {
     let Some(values) = &s.values else {
         return;
     };
@@ -140,7 +140,7 @@ fn emit_values(out: &mut String, s: &Specification) {
     out.push_str(CHILD_INDENT);
     out.push_str("<VALUES>\n");
     for av in values {
-        out.push_str(&unparse_attribute_value(av));
+        out.push_str(&unparse_attribute_value(av, mode));
     }
     out.push_str(CHILD_INDENT);
     out.push_str("</VALUES>\n");

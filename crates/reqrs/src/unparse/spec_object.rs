@@ -17,13 +17,13 @@
 
 use crate::model::spec_object::{SpecObject, SpecObjectChildTag};
 use crate::unparse::attribute_value::unparse_attribute_value;
-use crate::unparse::writer::{emit_comments_before, write_close, write_open};
+use crate::unparse::writer::{FormatMode, emit_comments_before, write_close, write_open};
 
 const INDENT: &str = "        "; // 8 spaces
 const CHILD_INDENT: &str = "          "; // 10 spaces
 const REF_INDENT: &str = "            "; // 12 spaces
 
-pub fn unparse_spec_object(so: &SpecObject) -> String {
+pub fn unparse_spec_object(so: &SpecObject, mode: FormatMode) -> String {
     let mut out = String::new();
     emit_comments_before(&mut out, INDENT, &so.comments_before);
     let mut attrs = collect_attrs(so);
@@ -42,7 +42,7 @@ pub fn unparse_spec_object(so: &SpecObject) -> String {
     for tag in order {
         match tag {
             SpecObjectChildTag::Type => emit_type(&mut out, so),
-            SpecObjectChildTag::Values => emit_values(&mut out, so),
+            SpecObjectChildTag::Values => emit_values(&mut out, so, mode),
         }
     }
 
@@ -76,7 +76,7 @@ fn emit_type(out: &mut String, so: &SpecObject) {
     out.push_str("</TYPE>\n");
 }
 
-fn emit_values(out: &mut String, so: &SpecObject) {
+fn emit_values(out: &mut String, so: &SpecObject, mode: FormatMode) {
     if so.attributes.is_empty() {
         out.push_str(CHILD_INDENT);
         out.push_str("<VALUES/>\n");
@@ -85,7 +85,7 @@ fn emit_values(out: &mut String, so: &SpecObject) {
     out.push_str(CHILD_INDENT);
     out.push_str("<VALUES>\n");
     for av in &so.attributes {
-        out.push_str(&unparse_attribute_value(av));
+        out.push_str(&unparse_attribute_value(av, mode));
     }
     out.push_str(CHILD_INDENT);
     out.push_str("</VALUES>\n");

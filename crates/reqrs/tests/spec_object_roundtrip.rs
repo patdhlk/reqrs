@@ -7,6 +7,7 @@
 //! `<SPEC-OBJECT-TYPE-REF>` and `<ATTRIBUTE-VALUE-*>` at 12.
 
 use pretty_assertions::assert_eq;
+use reqrs::FormatMode;
 use reqrs::model::{AttributeValue, AttributeValueString, SpecObject, SpecObjectChildTag};
 use reqrs::parse::spec_object::parse_spec_object;
 use reqrs::unparse::spec_object::unparse_spec_object;
@@ -14,7 +15,7 @@ use reqrs::{AttributeDefId, SpecObjectId, SpecTypeId};
 
 fn round_trip(xml: &str) {
     let so = parse_spec_object(xml).unwrap();
-    let out = unparse_spec_object(&so);
+    let out = unparse_spec_object(&so, FormatMode::Passthrough);
     assert_eq!(out, xml, "round-trip mismatch");
 }
 
@@ -107,7 +108,7 @@ fn spec_object_with_comments_before_emits_above_element() {
         children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
         comments_before: vec![" header for SO-1 ".into()],
     };
-    let out = unparse_spec_object(&so);
+    let out = unparse_spec_object(&so, FormatMode::Passthrough);
     let expected = r#"        <!-- header for SO-1 -->
         <SPEC-OBJECT IDENTIFIER="SO-1">
           <TYPE>
@@ -139,7 +140,7 @@ fn spec_object_with_comment_before_inner_attribute_value_emits_at_12_space_inden
         children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
         comments_before: vec![],
     };
-    let out = unparse_spec_object(&so);
+    let out = unparse_spec_object(&so, FormatMode::Passthrough);
     let expected = r#"        <SPEC-OBJECT IDENTIFIER="SO-1">
           <TYPE>
             <SPEC-OBJECT-TYPE-REF>ST-1</SPEC-OBJECT-TYPE-REF>

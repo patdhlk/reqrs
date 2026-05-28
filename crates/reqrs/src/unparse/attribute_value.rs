@@ -15,14 +15,22 @@
 //! first (the canonical `_TEMPLATE` constant). Order is selected by the
 //! per-variant `was_definition_first` flag captured during parse.
 
+use crate::helpers::xhtml_indent::{indent_16, unindent_16};
 use crate::model::attribute_value::*;
-use crate::unparse::writer::{emit_comments_before, escape_attr};
+use crate::unparse::writer::{FormatMode, emit_comments_before, escape_attr};
 
 const OUTER: &str = "            "; // 12 spaces
 const INNER: &str = "              "; // 14 spaces
 const REF: &str = "                "; // 16 spaces
 
-pub fn unparse_attribute_value(av: &AttributeValue) -> String {
+/// Emit a single `<ATTRIBUTE-VALUE-*>` element.
+///
+/// `mode` only affects the XHTML branch today — under
+/// [`FormatMode::Canonical`] the captured `the_value_raw` body is reflowed to
+/// the Python reference's 16-space margin; under [`FormatMode::Passthrough`]
+/// it is emitted verbatim so byte-exact round-trip is preserved. Scalar and
+/// enumeration variants emit identical bytes in both modes.
+pub fn unparse_attribute_value(av: &AttributeValue, mode: FormatMode) -> String {
     let mut out = String::new();
     emit_comments_before(&mut out, OUTER, av.comments_before());
     match av {
@@ -57,7 +65,7 @@ pub fn unparse_attribute_value(av: &AttributeValue) -> String {
             &a.value,
         )),
         AttributeValue::Enumeration(a) => out.push_str(&unparse_enumeration(a)),
-        AttributeValue::Xhtml(a) => out.push_str(&unparse_xhtml(a)),
+        AttributeValue::Xhtml(a) => out.push_str(&unparse_xhtml(a, mode)),
     }
     out
 }
@@ -143,10 +151,19 @@ fn unparse_enumeration(a: &AttributeValueEnumeration) -> String {
     out
 }
 
-fn unparse_xhtml(a: &AttributeValueXhtml) -> String {
+fn unparse_xhtml(a: &AttributeValueXhtml, mode: FormatMode) -> String {
     let mut out = String::new();
     out.push_str(OUTER);
     out.push_str("<ATTRIBUTE-VALUE-XHTML>\n");
+
+    // Under `Passthrough` we emit the captured bytes verbatim so the corpus
+    // round-trip stays byte-exact. Under `Canonical` we reflow through the
+    // Python helpers so any source-specific indentation is normalized to the
+    // canonical 16-space margin.
+    let body = match mode {
+        FormatMode::Passthrough => a.the_value_raw.clone(),
+        FormatMode::Canonical => indent_16(&unindent_16(&a.the_value_raw)),
+    };
 
     let emit_the_value = |out: &mut String, raw: &str| {
         out.push_str(INNER);
@@ -161,9 +178,9 @@ fn unparse_xhtml(a: &AttributeValueXhtml) -> String {
             "ATTRIBUTE-DEFINITION-XHTML-REF",
             a.definition_ref.as_str(),
         );
-        emit_the_value(&mut out, &a.the_value_raw);
+        emit_the_value(&mut out, &body);
     } else {
-        emit_the_value(&mut out, &a.the_value_raw);
+        emit_the_value(&mut out, &body);
         emit_definition(
             &mut out,
             "ATTRIBUTE-DEFINITION-XHTML-REF",

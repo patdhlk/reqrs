@@ -23,10 +23,16 @@ use crate::model::ReqIfBundle;
 pub struct ReqIfUnparser;
 
 impl ReqIfUnparser {
-    /// Render `bundle` back to XML. The [`FormatMode`] argument is reserved
-    /// for forthcoming canonicalization work; today both modes emit the same
-    /// bytes because the per-element unparsers consult their own
-    /// `was_self_closing` flags directly.
+    /// Render `bundle` back to XML.
+    ///
+    /// Under [`FormatMode::Passthrough`] every captured byte (XHTML
+    /// indentation, self-closing forms, attribute ordering captured by the
+    /// parser) is replayed verbatim, giving byte-exact round-trip on the
+    /// fixture corpus. Under [`FormatMode::Canonical`] XHTML bodies inside
+    /// `<ATTRIBUTE-VALUE-XHTML>` are reflowed to the Python reference's
+    /// 16-space margin via
+    /// [`crate::helpers::xhtml_indent`]; other structural decisions still
+    /// honor the per-element flags captured during parse.
     pub fn unparse(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, ReqIfError> {
         driver::unparse_bundle(bundle, mode)
     }

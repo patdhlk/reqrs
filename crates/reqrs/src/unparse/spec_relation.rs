@@ -18,13 +18,13 @@
 
 use crate::model::spec_relation::{SpecRelation, SpecRelationChildTag};
 use crate::unparse::attribute_value::unparse_attribute_value;
-use crate::unparse::writer::{write_close, write_open};
+use crate::unparse::writer::{FormatMode, write_close, write_open};
 
 const INDENT: &str = "        "; // 8 spaces
 const CHILD_INDENT: &str = "          "; // 10 spaces
 const REF_INDENT: &str = "            "; // 12 spaces
 
-pub fn unparse_spec_relation(sr: &SpecRelation) -> String {
+pub fn unparse_spec_relation(sr: &SpecRelation, mode: FormatMode) -> String {
     let mut out = String::new();
     let mut attrs = collect_attrs(sr);
     write_open(&mut out, INDENT, "SPEC-RELATION", &mut attrs)
@@ -50,7 +50,7 @@ pub fn unparse_spec_relation(sr: &SpecRelation) -> String {
             SpecRelationChildTag::Type => emit_type(&mut out, sr),
             SpecRelationChildTag::Source => emit_source(&mut out, sr),
             SpecRelationChildTag::Target => emit_target(&mut out, sr),
-            SpecRelationChildTag::Values => emit_values(&mut out, sr),
+            SpecRelationChildTag::Values => emit_values(&mut out, sr, mode),
         }
     }
 
@@ -106,7 +106,7 @@ fn emit_target(out: &mut String, sr: &SpecRelation) {
     out.push_str("</TARGET>\n");
 }
 
-fn emit_values(out: &mut String, sr: &SpecRelation) {
+fn emit_values(out: &mut String, sr: &SpecRelation, mode: FormatMode) {
     let Some(values) = &sr.values else {
         return;
     };
@@ -118,7 +118,7 @@ fn emit_values(out: &mut String, sr: &SpecRelation) {
     out.push_str(CHILD_INDENT);
     out.push_str("<VALUES>\n");
     for av in values {
-        out.push_str(&unparse_attribute_value(av));
+        out.push_str(&unparse_attribute_value(av, mode));
     }
     out.push_str(CHILD_INDENT);
     out.push_str("</VALUES>\n");
