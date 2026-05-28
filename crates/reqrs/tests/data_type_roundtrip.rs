@@ -46,6 +46,15 @@ fn date_self_closed() {
 }
 
 #[test]
+fn enumeration_with_self_closed_specified_values() {
+    let xml = r#"        <DATATYPE-DEFINITION-ENUMERATION IDENTIFIER="DT-E2">
+          <SPECIFIED-VALUES/>
+        </DATATYPE-DEFINITION-ENUMERATION>
+"#;
+    round_trip(xml);
+}
+
+#[test]
 fn enumeration_with_values() {
     let xml = r#"        <DATATYPE-DEFINITION-ENUMERATION IDENTIFIER="DT-E" LONG-NAME="E">
           <SPECIFIED-VALUES>

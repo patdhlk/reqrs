@@ -22,7 +22,9 @@ pub fn unparse_data_type(dt: &DataType) -> String {
             ],
         ),
         DataType::Real(d) => {
-            // Python always emits Real self-closed.
+            // ReqIF Real datatypes are always emitted self-closed, matching the Python
+            // reference library's behavior. Real has no inner content per the spec, so
+            // open/close form is degenerate; the override normalizes to self-closed.
             let mut common = d.common.clone();
             common.was_self_closing = true;
             unparse_simple(
@@ -126,43 +128,47 @@ fn unparse_enumeration(d: &DataTypeEnumeration) -> String {
     )
     .expect("writing to String never fails");
     if let Some(values) = &d.specified_values {
-        out.push_str("          <SPECIFIED-VALUES>\n");
-        for v in values {
-            out.push_str("            <ENUM-VALUE");
-            let mut ev_attrs: Vec<(&str, String)> = Vec::new();
-            if let Some(s) = &v.description {
-                ev_attrs.push(("DESC", s.clone()));
-            }
-            ev_attrs.push(("IDENTIFIER", v.identifier.as_str().to_owned()));
-            if let Some(s) = &v.last_change {
-                ev_attrs.push(("LAST-CHANGE", s.clone()));
-            }
-            if let Some(s) = &v.long_name {
-                ev_attrs.push(("LONG-NAME", s.clone()));
-            }
-            ev_attrs.sort_by(|a, b| a.0.cmp(b.0));
-            for (k, val) in &ev_attrs {
-                out.push(' ');
-                out.push_str(k);
-                out.push_str("=\"");
-                escape_attr(&mut out, val);
+        if values.is_empty() {
+            out.push_str("          <SPECIFIED-VALUES/>\n");
+        } else {
+            out.push_str("          <SPECIFIED-VALUES>\n");
+            for v in values {
+                out.push_str("            <ENUM-VALUE");
+                let mut ev_attrs: Vec<(&str, String)> = Vec::new();
+                if let Some(s) = &v.description {
+                    ev_attrs.push(("DESC", s.clone()));
+                }
+                ev_attrs.push(("IDENTIFIER", v.identifier.as_str().to_owned()));
+                if let Some(s) = &v.last_change {
+                    ev_attrs.push(("LAST-CHANGE", s.clone()));
+                }
+                if let Some(s) = &v.long_name {
+                    ev_attrs.push(("LONG-NAME", s.clone()));
+                }
+                ev_attrs.sort_by(|a, b| a.0.cmp(b.0));
+                for (k, val) in &ev_attrs {
+                    out.push(' ');
+                    out.push_str(k);
+                    out.push_str("=\"");
+                    escape_attr(&mut out, val);
+                    out.push('"');
+                }
+                out.push_str(">\n");
+                out.push_str("              <PROPERTIES>\n");
+                out.push_str("                <EMBEDDED-VALUE KEY=\"");
+                escape_attr(&mut out, &v.key);
                 out.push('"');
+                if let Some(oc) = &v.other_content {
+                    out.push_str(" OTHER-CONTENT=\"");
+                    escape_attr(&mut out, oc);
+                    out.push('"');
+                }
+                out.push_str("/>\n");
+                out.push_str("              </PROPERTIES>\n");
+                out.push_str("            </ENUM-VALUE>\n");
             }
-            out.push_str(">\n");
-            out.push_str("              <PROPERTIES>\n");
-            out.push_str("                <EMBEDDED-VALUE KEY=\"");
-            escape_attr(&mut out, &v.key);
-            out.push('"');
-            if let Some(oc) = &v.other_content {
-                out.push_str(" OTHER-CONTENT=\"");
-                escape_attr(&mut out, oc);
-                out.push('"');
-            }
-            out.push_str("/>\n");
-            out.push_str("              </PROPERTIES>\n");
-            out.push_str("            </ENUM-VALUE>\n");
+            out.push_str("          </SPECIFIED-VALUES>\n");
         }
-        out.push_str("          </SPECIFIED-VALUES>\n");
     }
     write_close(&mut out, INDENT, "DATATYPE-DEFINITION-ENUMERATION");
     out

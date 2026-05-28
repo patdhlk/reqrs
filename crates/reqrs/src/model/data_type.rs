@@ -26,7 +26,7 @@ impl DataType {
 }
 
 /// Common attributes shared by all `<DATATYPE-DEFINITION-*>` tags.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataTypeCommon {
     pub description: Option<String>,
     pub last_change: Option<String>,
@@ -36,7 +36,7 @@ pub struct DataTypeCommon {
 
 macro_rules! dt_struct {
     ($name:ident { $($field:ident : $ty:ty),* $(,)? }) => {
-        #[derive(Debug, Clone, PartialEq, Eq, Default)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         pub struct $name {
             pub identifier: DataTypeId,
             pub common: DataTypeCommon,
@@ -52,7 +52,7 @@ dt_struct!(DataTypeReal    { accuracy: Option<String>, max_value: Option<String>
 dt_struct!(DataTypeDate {});
 dt_struct!(DataTypeXhtml {});
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataTypeEnumeration {
     pub identifier: DataTypeId,
     pub common: DataTypeCommon,

@@ -164,6 +164,30 @@ fn parse_enum_values_list(r: &mut ReqIfReader<'_>) -> Result<Vec<EnumValue>, Req
 fn parse_enum_value_properties(
     r: &mut ReqIfReader<'_>,
 ) -> Result<(String, Option<String>), ReqIfError> {
+    // Expect <PROPERTIES> first.
+    loop {
+        match r.read_event()? {
+            Event::Start(s) if s.name().as_ref() == b"PROPERTIES" => {
+                return parse_properties_body(r);
+            }
+            Event::End(e) if e.name().as_ref() == b"ENUM-VALUE" => {
+                return Err(ReqIfError::MissingChild {
+                    child: "PROPERTIES".into(),
+                    parent: "ENUM-VALUE".into(),
+                });
+            }
+            Event::Eof => {
+                return Err(ReqIfError::Xml {
+                    pos: r.buffer_position(),
+                    msg: "EOF inside <ENUM-VALUE>".into(),
+                });
+            }
+            _ => continue,
+        }
+    }
+}
+
+fn parse_properties_body(r: &mut ReqIfReader<'_>) -> Result<(String, Option<String>), ReqIfError> {
     let mut key = None;
     let mut other_content = None;
     loop {
@@ -173,16 +197,36 @@ fn parse_enum_value_properties(
                 other_content = optional_attr(&s, "OTHER-CONTENT");
             }
             Event::Start(s) if s.name().as_ref() == b"EMBEDDED-VALUE" => {
-                key = Some(required_attr(&s, "KEY")?);
-                other_content = optional_attr(&s, "OTHER-CONTENT");
+                let owned_start = s.into_owned();
+                key = Some(required_attr(&owned_start, "KEY")?);
+                other_content = optional_attr(&owned_start, "OTHER-CONTENT");
+                // EMBEDDED-VALUE is leaf-only per spec; consume its end.
+                r.skip_to_end(&owned_start)?;
             }
-            Event::End(e) if e.name().as_ref() == b"ENUM-VALUE" => {
+            Event::End(e) if e.name().as_ref() == b"PROPERTIES" => {
                 let key = key.ok_or(ReqIfError::MissingChild {
                     child: "EMBEDDED-VALUE".into(),
                     parent: "PROPERTIES".into(),
                 })?;
+                // After </PROPERTIES>, consume up to </ENUM-VALUE>.
+                consume_to_enum_value_close(r)?;
                 return Ok((key, other_content));
             }
+            Event::Eof => {
+                return Err(ReqIfError::Xml {
+                    pos: r.buffer_position(),
+                    msg: "EOF inside <PROPERTIES>".into(),
+                });
+            }
+            _ => continue,
+        }
+    }
+}
+
+fn consume_to_enum_value_close(r: &mut ReqIfReader<'_>) -> Result<(), ReqIfError> {
+    loop {
+        match r.read_event()? {
+            Event::End(e) if e.name().as_ref() == b"ENUM-VALUE" => return Ok(()),
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
