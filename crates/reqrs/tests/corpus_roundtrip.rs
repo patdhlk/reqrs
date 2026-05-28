@@ -33,12 +33,13 @@ fn workspace_root() -> PathBuf {
 /// Baseline established 2026-05-28 (Task 23): 11/23 passed, 12 listed below.
 /// Failures cluster into three modes:
 ///
-/// 1. SPEC-RELATION child ordering. The unparser always emits children in
-///    the canonical order TYPE -> SOURCE -> TARGET -> VALUES, but some
-///    vendors (Polarion, ReqIF Studio, Sparx) emit them with VALUES or
-///    SOURCE first. Fix needs the parser to capture original child order
-///    on each `SpecRelation` so the unparser can replay it. Affects:
-///    TC1300, ReqIF_Studio/01, SparxSystems/01.
+/// 1. SPEC-RELATION child ordering.
+///    FIXED 2026-05-28: SpecRelation.children_order now records the source
+///    order of `<TYPE>`, `<SOURCE>`, `<TARGET>`, and `<VALUES>` during parse;
+///    the unparser iterates it to preserve vendor-specific orderings
+///    (Polarion / ReqIF Studio emit VALUES first; SparxSystems emits SOURCE
+///    first). Falls back to canonical TYPE → SOURCE → TARGET → VALUES order
+///    when `children_order` is empty (synthetic construction).
 ///
 /// 2. Vendor-specific xmlns attributes on `<REQ-IF>`. The `NamespaceInfo`
 ///    model only knows the standard set (xmlns, xmlns:xsi, xmlns:configuration,
@@ -56,9 +57,8 @@ fn workspace_root() -> PathBuf {
 ///    Affects: Doors/10_capella, examples/04/sample2_sdoc.
 const KNOWN_FAILURES: &[&str] = &[
     // Mode 1: SPEC-RELATION child ordering.
-    "reqif_software/ci.eclipse.org/TC1300_E0000_S10_Reference_20210122_1256_jenkins/sample.reqif",
-    "reqif_software/ReqIF_Studio/01_anonimized_example/sample.reqif",
-    "reqif_software/SparxSystems_Enterprise_Architect_8.0/01_example/sample.reqif",
+    // FIXED 2026-05-28: SpecRelation.children_order captures source order
+    // (Type / Source / Target / Values); the unparser replays it.
     // Mode 2: vendor-specific xmlns attributes dropped.
     // FIXED 2026-05-28 (Task 24): NamespaceInfo.attributes_in_order now
     // captures the full attribute list in source order; the unparser walks

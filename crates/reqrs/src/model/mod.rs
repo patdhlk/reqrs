@@ -37,7 +37,7 @@ pub use namespace::NamespaceInfo;
 pub use relation_group::RelationGroup;
 pub use spec_hierarchy::SpecHierarchy;
 pub use spec_object::{SpecObject, SpecObjectChildTag};
-pub use spec_relation::SpecRelation;
+pub use spec_relation::{SpecRelation, SpecRelationChildTag};
 pub use spec_type::{
     RelationGroupType, SpecObjectType, SpecRelationType, SpecType, SpecTypeCommon,
     SpecificationType,

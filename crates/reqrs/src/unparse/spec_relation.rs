@@ -10,10 +10,13 @@
 //!   [`crate::unparse::attribute_value::unparse_attribute_value`]
 //!
 //! Outer-tag attributes are alphabetically sorted (DESC, IDENTIFIER,
-//! LAST-CHANGE, LONG-NAME). Children are emitted in the canonical Python
-//! order: TYPE → SOURCE → TARGET → VALUES.
+//! LAST-CHANGE, LONG-NAME). Children are emitted in the order captured by
+//! [`SpecRelationChildTag`] during parse — the canonical order is
+//! TYPE → SOURCE → TARGET → VALUES, but Polarion / ReqIF Studio emit VALUES
+//! first and SparxSystems emits SOURCE first. When `children_order` is empty
+//! (synthetic construction) the unparser falls back to the canonical order.
 
-use crate::model::spec_relation::SpecRelation;
+use crate::model::spec_relation::{SpecRelation, SpecRelationChildTag};
 use crate::unparse::attribute_value::unparse_attribute_value;
 use crate::unparse::writer::{write_close, write_open};
 
@@ -27,10 +30,29 @@ pub fn unparse_spec_relation(sr: &SpecRelation) -> String {
     write_open(&mut out, INDENT, "SPEC-RELATION", &mut attrs)
         .expect("writing to String never fails");
 
-    emit_type(&mut out, sr);
-    emit_source(&mut out, sr);
-    emit_target(&mut out, sr);
-    emit_values(&mut out, sr);
+    // If no children_order was captured (synthetic SpecRelation), default to
+    // the canonical TYPE → SOURCE → TARGET → VALUES order. Real parser output
+    // always populates the sequence in source order.
+    let default_order = [
+        SpecRelationChildTag::Type,
+        SpecRelationChildTag::Source,
+        SpecRelationChildTag::Target,
+        SpecRelationChildTag::Values,
+    ];
+    let order: &[SpecRelationChildTag] = if sr.children_order.is_empty() {
+        &default_order
+    } else {
+        &sr.children_order
+    };
+
+    for tag in order {
+        match tag {
+            SpecRelationChildTag::Type => emit_type(&mut out, sr),
+            SpecRelationChildTag::Source => emit_source(&mut out, sr),
+            SpecRelationChildTag::Target => emit_target(&mut out, sr),
+            SpecRelationChildTag::Values => emit_values(&mut out, sr),
+        }
+    }
 
     write_close(&mut out, INDENT, "SPEC-RELATION");
     out

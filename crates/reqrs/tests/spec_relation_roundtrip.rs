@@ -33,6 +33,52 @@ fn spec_relation_minimal() {
 }
 
 #[test]
+fn spec_relation_values_first_then_target_source_type() {
+    // Polarion / ReqIF Studio style: VALUES → TARGET → SOURCE → TYPE.
+    // children_order captures `[Values, Target, Source, Type]` and the
+    // unparser emits in that exact sequence — preserving the source-order
+    // signature byte-for-byte.
+    let xml = r#"        <SPEC-RELATION IDENTIFIER="SR-3">
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="LNK-2">
+              <DEFINITION>
+                <ATTRIBUTE-DEFINITION-STRING-REF>AD-REL</ATTRIBUTE-DEFINITION-STRING-REF>
+              </DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+          <TARGET>
+            <SPEC-OBJECT-REF>SO-T</SPEC-OBJECT-REF>
+          </TARGET>
+          <SOURCE>
+            <SPEC-OBJECT-REF>SO-S</SPEC-OBJECT-REF>
+          </SOURCE>
+          <TYPE>
+            <SPEC-RELATION-TYPE-REF>SRT-3</SPEC-RELATION-TYPE-REF>
+          </TYPE>
+        </SPEC-RELATION>
+"#;
+    round_trip(xml);
+}
+
+#[test]
+fn spec_relation_source_first_no_values() {
+    // SparxSystems style: SOURCE → TARGET → TYPE, no VALUES block.
+    let xml = r#"        <SPEC-RELATION IDENTIFIER="SR-4">
+          <SOURCE>
+            <SPEC-OBJECT-REF>SO-S</SPEC-OBJECT-REF>
+          </SOURCE>
+          <TARGET>
+            <SPEC-OBJECT-REF>SO-T</SPEC-OBJECT-REF>
+          </TARGET>
+          <TYPE>
+            <SPEC-RELATION-TYPE-REF>SRT-4</SPEC-RELATION-TYPE-REF>
+          </TYPE>
+        </SPEC-RELATION>
+"#;
+    round_trip(xml);
+}
+
+#[test]
 fn spec_relation_with_values() {
     // Full set of optional attributes + VALUES block with one string attribute.
     // Outer attributes are alphabetically sorted (DESC, IDENTIFIER, LAST-CHANGE,

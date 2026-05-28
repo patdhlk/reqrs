@@ -11,7 +11,7 @@
 use crate::error::ReqIfError;
 use crate::ids::{SpecObjectId, SpecRelationId, SpecTypeId};
 use crate::model::AttributeValue;
-use crate::model::spec_relation::SpecRelation;
+use crate::model::spec_relation::{SpecRelation, SpecRelationChildTag};
 use crate::parse::attribute_value::parse_attribute_values_inner;
 use crate::parse::reader::{ReqIfReader, optional_attr, required_attr};
 use quick_xml::events::{BytesStart, Event};
@@ -66,26 +66,32 @@ pub(crate) fn parse_spec_relation_inner(
     let mut source: Option<SpecObjectId> = None;
     let mut target: Option<SpecObjectId> = None;
     let mut values: Option<Vec<AttributeValue>> = None;
+    let mut children_order: Vec<SpecRelationChildTag> = Vec::with_capacity(4);
 
     loop {
         match r.read_event()? {
             Event::Start(s) if s.name().as_ref() == b"TYPE" => {
+                children_order.push(SpecRelationChildTag::Type);
                 let text = read_inner_ref(r, b"TYPE", b"SPEC-RELATION-TYPE-REF")?;
                 relation_type = Some(SpecTypeId(text));
             }
             Event::Start(s) if s.name().as_ref() == b"SOURCE" => {
+                children_order.push(SpecRelationChildTag::Source);
                 let text = read_inner_ref(r, b"SOURCE", b"SPEC-OBJECT-REF")?;
                 source = Some(SpecObjectId(text));
             }
             Event::Start(s) if s.name().as_ref() == b"TARGET" => {
+                children_order.push(SpecRelationChildTag::Target);
                 let text = read_inner_ref(r, b"TARGET", b"SPEC-OBJECT-REF")?;
                 target = Some(SpecObjectId(text));
             }
             Event::Start(s) if s.name().as_ref() == b"VALUES" => {
+                children_order.push(SpecRelationChildTag::Values);
                 values = Some(parse_attribute_values_inner(r)?);
             }
             Event::Empty(s) if s.name().as_ref() == b"VALUES" => {
                 let _ = s;
+                children_order.push(SpecRelationChildTag::Values);
                 values = Some(Vec::new());
             }
             Event::End(e) if e.name().as_ref() == b"SPEC-RELATION" => {
@@ -110,6 +116,7 @@ pub(crate) fn parse_spec_relation_inner(
                     source,
                     target,
                     values,
+                    children_order,
                 });
             }
             Event::Eof => {

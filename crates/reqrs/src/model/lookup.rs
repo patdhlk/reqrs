@@ -149,6 +149,7 @@ mod tests {
             source: SpecObjectId::new("SO-A"),
             target: SpecObjectId::new("SO-B"),
             values: None,
+            children_order: Vec::new(),
         };
         let content = ReqIfContent {
             spec_objects: Some(vec![so_a, so_b]),

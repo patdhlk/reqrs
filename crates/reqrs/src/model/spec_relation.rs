@@ -5,9 +5,26 @@
 //! (`target`), tagged by a [`crate::model::SpecRelationType`] reference
 //! (`relation_type`), and optionally carrying a `<VALUES>` list of
 //! [`crate::model::AttributeValue`]s.
+//!
+//! The Python implementation stashes the raw `xml_node` so the unparser can
+//! recover the original child order — vendors disagree: the canonical order
+//! is TYPE → SOURCE → TARGET → VALUES, but Polarion / ReqIF Studio emit
+//! VALUES first and SparxSystems emits SOURCE first. Rather than carry an
+//! lxml-shaped node graph through the model, we record an explicit
+//! [`SpecRelationChildTag`] sequence as the parser walks the body.
 
 use crate::ids::{SpecObjectId, SpecRelationId, SpecTypeId};
 use crate::model::AttributeValue;
+
+/// Marker recording which child was seen during parse, in source order. The
+/// unparser iterates this list to re-emit children in the original order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpecRelationChildTag {
+    Type,
+    Source,
+    Target,
+    Values,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpecRelation {
@@ -24,4 +41,9 @@ pub struct SpecRelation {
     /// Optional `<VALUES>` block. `None` means the source had no `<VALUES>` at
     /// all; the Python reference treats this as the common case.
     pub values: Option<Vec<AttributeValue>>,
+    /// Source order of the body children. Populated by the parser; the
+    /// unparser iterates it to preserve vendor-specific orderings. When empty
+    /// (e.g. synthetic construction), the unparser falls back to the canonical
+    /// `[Type, Source, Target, Values]` order.
+    pub children_order: Vec<SpecRelationChildTag>,
 }
