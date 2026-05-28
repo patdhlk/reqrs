@@ -44,7 +44,6 @@ pub fn parse_attribute_value(xml: &str) -> Result<AttributeValue, ReqIfError> {
 /// closing `</VALUES>` is reached, returning the collected typed values.
 ///
 /// Precondition: the caller has just consumed the `<VALUES>` start event.
-#[allow(dead_code)] // wired by Task 11 (SpecObject parser)
 pub(crate) fn parse_attribute_values_inner(
     r: &mut ReqIfReader<'_>,
 ) -> Result<Vec<AttributeValue>, ReqIfError> {
