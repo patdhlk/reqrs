@@ -27,14 +27,19 @@ pub(crate) fn escape_attr(out: &mut String, s: &str) {
 
 /// Append an XML-escaped representation of `s` to `out`, for use inside element text content.
 ///
-/// Unlike `escape_attr`, this does NOT escape `"` or `'` because they are legal as
-/// raw characters inside element content (attribute quoting is the only place they matter).
+/// Per the XML 1.0 spec, only `&` and `<` are required to be escaped in element
+/// text content; `>` is legal raw except in the `]]>` sequence inside CDATA,
+/// which we never emit. We deliberately leave `>` unescaped here so round-trip
+/// preserves the form most ReqIF tools (Polarion, Doors, ReqIF Studio, the
+/// Eclipse RMF reference) emit — a literal `>` in titles like `"OEM -> SUP"`.
+///
+/// Quotes (`"` and `'`) are also legal raw inside text content; attribute
+/// quoting is handled by [`escape_attr`].
 pub(crate) fn escape_text(out: &mut String, s: &str) {
     for c in s.chars() {
         match c {
             '&' => out.push_str("&amp;"),
             '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
             _ => out.push(c),
         }
     }
@@ -131,10 +136,14 @@ mod tests {
     }
 
     #[test]
-    fn escape_text_handles_amp_and_brackets_but_leaves_quotes() {
+    fn escape_text_handles_amp_and_lt_but_leaves_gt_and_quotes() {
+        // Per the XML 1.0 spec, only `&` and `<` MUST be escaped in element
+        // text content. We deliberately leave `>` as a literal to match the
+        // form that real ReqIF tools (Polarion, Doors, ReqIF Studio, Eclipse
+        // RMF) emit in titles like "OEM -> SUP".
         let mut out = String::new();
         escape_text(&mut out, "a & b < c > d \"e\" 'f'");
-        assert_eq!(out, "a &amp; b &lt; c &gt; d \"e\" 'f'");
+        assert_eq!(out, "a &amp; b &lt; c > d \"e\" 'f'");
     }
 
     #[test]

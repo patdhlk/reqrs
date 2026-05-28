@@ -1,0 +1,179 @@
+//! Corpus round-trip regression net.
+//!
+//! Walks every `.reqif` file in `tests/corpus/` and asserts that
+//! `parse → unparse` (in `Passthrough` mode) yields a byte-identical
+//! output. Files where round-trip fidelity is not yet byte-identical
+//! are listed in `KNOWN_FAILURES` along with a brief note on the
+//! failure mode — the harness still asserts they are skipped, but
+//! does not gate CI on them.
+//!
+//! The `.reqifz` (zipped) files in the corpus are NOT exercised here
+//! — they need their own harness with bundle handling.
+
+use std::path::{Path, PathBuf};
+
+use reqrs::{FormatMode, ReqIfParser, ReqIfUnparser};
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_owned()
+}
+
+/// Files where round-trip is known not to be byte-identical today.
+///
+/// Each entry is the path relative to `tests/corpus/`. Add entries
+/// here when a fix would take more than ~30 minutes; remove them as
+/// they get fixed. Keep the comment terse — it is the only breadcrumb
+/// the next session has.
+///
+/// Baseline established 2026-05-28 (Task 23): 11/23 passed, 12 listed below.
+/// Failures cluster into three modes:
+///
+/// 1. SPEC-RELATION child ordering. The unparser always emits children in
+///    the canonical order TYPE -> SOURCE -> TARGET -> VALUES, but some
+///    vendors (Polarion, ReqIF Studio, Sparx) emit them with VALUES or
+///    SOURCE first. Fix needs the parser to capture original child order
+///    on each `SpecRelation` so the unparser can replay it. Affects:
+///    TC1300, ReqIF_Studio/01, SparxSystems/01.
+///
+/// 2. Vendor-specific xmlns attributes on `<REQ-IF>`. The `NamespaceInfo`
+///    model only knows the standard set (xmlns, xmlns:xsi, xmlns:configuration,
+///    xmlns:id, xmlns:xhtml, xsi:schemaLocation, xml:lang). Doors files add
+///    `xmlns:doors`, `xmlns:reqif-common`, etc. — these are dropped. Fix
+///    needs an `extra_attributes: Vec<(String, String)>` on `NamespaceInfo`
+///    plus parser capture and unparser emit in the original interleaved order.
+///    Affects: Doors/01..06, examples/02_read_reqif/input.reqif.
+///
+/// 3. Empty paired-tag containers vs self-closed. When a file has
+///    `<SPEC-RELATIONS>\n      </SPEC-RELATIONS>\n` (empty paired form)
+///    we emit `<SPEC-RELATIONS/>\n`. Both are semantically identical.
+///    Fix needs an "original form" flag on each `Option<Vec<_>>` container
+///    in `ReqIfContent` (or model the empty-paired form explicitly).
+///    Affects: Doors/10_capella, examples/04/sample2_sdoc.
+const KNOWN_FAILURES: &[&str] = &[
+    // Mode 1: SPEC-RELATION child ordering.
+    "reqif_software/ci.eclipse.org/TC1300_E0000_S10_Reference_20210122_1256_jenkins/sample.reqif",
+    "reqif_software/ReqIF_Studio/01_anonimized_example/sample.reqif",
+    "reqif_software/SparxSystems_Enterprise_Architect_8.0/01_example/sample.reqif",
+    // Mode 2: vendor-specific xmlns attributes dropped.
+    "reqif_software/Doors/01_anonimized_example_date_data_type/sample.reqif",
+    "reqif_software/Doors/02_example_from_a_user/sample.reqif",
+    "reqif_software/Doors/03_example_from_a_user/sample.reqif",
+    "reqif_software/Doors/04_example_from_a_user/sample.reqif",
+    "reqif_software/Doors/05_example_from_a_user/sample.reqif",
+    "reqif_software/Doors/06_example_from_a_user/sample.reqif",
+    "examples/02_read_reqif/input.reqif",
+    // Mode 3: empty paired-tag container collapsed to self-closed.
+    "reqif_software/Doors/10_example_capella_requirements_vp/sample.reqif",
+    "examples/04_convert_reqif_to_json/sample2_sdoc.reqif",
+];
+
+#[test]
+fn every_reqif_in_corpus_round_trips() {
+    let corpus_root = workspace_root().join("tests/corpus");
+    assert!(
+        corpus_root.exists(),
+        "corpus not found at {}",
+        corpus_root.display()
+    );
+
+    let mut failures: Vec<String> = Vec::new();
+    let mut passed = 0usize;
+    let mut skipped = 0usize;
+
+    for entry in walkdir::WalkDir::new(&corpus_root)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        if entry.file_type().is_dir() {
+            continue;
+        }
+        let path = entry.path();
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        if ext != "reqif" {
+            continue;
+        }
+
+        let rel = path
+            .strip_prefix(&corpus_root)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        if KNOWN_FAILURES.contains(&rel.as_str()) {
+            skipped += 1;
+            continue;
+        }
+
+        let input = match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                failures.push(format!("{rel}: read error: {e}"));
+                continue;
+            }
+        };
+        let bundle = match ReqIfParser::parse_str(&input) {
+            Ok(b) => b,
+            Err(e) => {
+                failures.push(format!("{rel}: parse error: {e}"));
+                continue;
+            }
+        };
+        let out = match ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough) {
+            Ok(o) => o,
+            Err(e) => {
+                failures.push(format!("{rel}: unparse error: {e}"));
+                continue;
+            }
+        };
+        if out != input {
+            let preview_diff = first_diff_preview(&input, &out);
+            failures.push(format!("{rel}: round-trip mismatch\n  {preview_diff}"));
+        } else {
+            passed += 1;
+        }
+    }
+
+    let total = passed + failures.len() + skipped;
+    println!(
+        "corpus summary: {passed}/{total} passed, {} failed, {skipped} skipped",
+        failures.len()
+    );
+
+    assert!(
+        failures.is_empty(),
+        "\n{} of {} corpus files failed round-trip:\n{}\n",
+        failures.len(),
+        total,
+        failures.join("\n")
+    );
+}
+
+fn first_diff_preview(a: &str, b: &str) -> String {
+    for (i, (ca, cb)) in a.chars().zip(b.chars()).enumerate() {
+        if ca != cb {
+            let start = i.saturating_sub(20);
+            let end_a = (i + 40).min(a.len());
+            let end_b = (i + 40).min(b.len());
+            return format!(
+                "first diff at byte {i}: expected ...{:?}... got ...{:?}...",
+                &a[start..end_a],
+                &b[start..end_b]
+            );
+        }
+    }
+    if a.len() != b.len() {
+        format!(
+            "length differs: input {} bytes, output {} bytes",
+            a.len(),
+            b.len()
+        )
+    } else {
+        "identical (test bug?)".to_string()
+    }
+}
