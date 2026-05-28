@@ -16,7 +16,24 @@
 //! The checks are intentionally narrow: anything the parser would reject
 //! (missing required attributes, malformed XML) never reaches us.
 //! [`validate`] only flags issues that the parser tolerates but that break
-//! reference integrity:
+//! reference integrity, plus a handful of XML-prologue advisories that
+//! mirror Python's `ReqIFErrorBundle` output.
+//!
+//! Findings are partitioned into three tiers via [`ValidateReport`]:
+//!
+//! - [`ValidateReport::xml_errors`] — fatal parse-level problems. Today
+//!   this list is always empty (a malformed document fails [`crate::parse::ReqIfParser`]
+//!   before we ever reach the checks), but the field exists for parity
+//!   with Python's `ReqIFErrorBundle.xml_errors` and gives the CLI a
+//!   stable place to surface future parse-recovery diagnostics.
+//! - [`ValidateReport::schema_errors`] — XSD violations reported by
+//!   `xmllint` plus any [`SchemaWarning`]s the parser accumulated on
+//!   [`ReqIfBundle::exceptions`].
+//! - [`ValidateReport::semantic_warnings`] — everything else: duplicate
+//!   IDENTIFIERs, dangling refs, missing XML declaration, non-UTF-8
+//!   encoding.
+//!
+//! Checks that land here:
 //!
 //! - **Duplicate `IDENTIFIER`s** across the six top-level lists
 //!   (`<DATATYPES>`, `<SPEC-TYPES>`, `<SPEC-OBJECTS>`, `<SPECIFICATIONS>`,
@@ -30,9 +47,14 @@
 //! - **Dangling `<SPEC-RELATION>` source/target** — every relation's
 //!   `<SOURCE>` and `<TARGET>` must resolve to a known
 //!   [`crate::model::SpecObject`].
-//!
-//! Errors are collected into [`ValidateReport::errors`]; the CLI layer
-//! (Task 21) translates a non-empty list into a non-zero exit code.
+//! - **Dangling `<SPEC-HIERARCHY>` object ref** — every hierarchy node's
+//!   `<OBJECT>/<SPEC-OBJECT-REF>` must resolve to a known
+//!   [`crate::model::SpecObject`]. Iterated via
+//!   [`ReqIfBundle::iterate_specification_hierarchy`].
+//! - **Missing XML declaration** — Python's reference flags documents that
+//!   lack the `<?xml ... ?>` prologue.
+//! - **Non-UTF-8 encoding** — Python's reference recommends UTF-8 per the
+//!   ReqIF Implementation Guide.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -56,20 +78,50 @@ pub struct ValidateOpts {
     pub use_reqif_schema: bool,
 }
 
+/// Three-tier validation report mirroring Python's `ReqIFErrorBundle`.
+///
+/// See the module-level docs for the semantics of each tier. A clean
+/// document yields a report where every list is empty —
+/// [`ValidateReport::has_any_errors`] is the canonical "did anything
+/// fail?" predicate for the CLI exit code decision.
 #[derive(Debug, Default, Clone)]
 pub struct ValidateReport {
-    pub errors: Vec<String>,
+    /// Parse-level errors (malformed XML). If non-empty, the document is
+    /// unparseable. Today always empty (the parser fails fast); reserved
+    /// for future parse-recovery diagnostics for parity with Python.
+    pub xml_errors: Vec<String>,
+    /// Schema-level errors — XSD violations from `xmllint` plus the
+    /// [`crate::error::SchemaWarning`]s surfaced via
+    /// [`ReqIfBundle::exceptions`] during parse.
+    pub schema_errors: Vec<String>,
+    /// Semantic warnings — dangling refs, duplicate IDENTIFIERs, missing
+    /// XML declaration, non-UTF-8 encoding.
+    pub semantic_warnings: Vec<String>,
+}
+
+impl ValidateReport {
+    /// `true` iff any tier has at least one entry. The CLI maps this to a
+    /// non-zero exit code.
+    pub fn has_any_errors(&self) -> bool {
+        !self.xml_errors.is_empty()
+            || !self.schema_errors.is_empty()
+            || !self.semantic_warnings.is_empty()
+    }
 }
 
 /// Parse `opts.input` and run the always-on semantic checks. If
-/// `opts.use_reqif_schema` is set, also run the XSD conformance check
-/// (Task 20). Returns an empty `errors` list when the document is clean.
+/// `opts.use_reqif_schema` is set, also run the XSD conformance check.
+/// Returns a [`ValidateReport`] whose tiers are populated according to
+/// the kinds of issues found; an all-empty report means a clean document.
 pub fn validate(opts: ValidateOpts) -> Result<ValidateReport, ReqIfError> {
     let bundle = ReqIfParser::parse_path(&opts.input)?;
     let mut report = ValidateReport::default();
 
     check_duplicate_identifiers(&bundle, &mut report);
     check_dangling_refs(&bundle, &mut report);
+    check_dangling_hierarchy_refs(&bundle, &mut report);
+    check_xml_prologue(&bundle, &mut report);
+    surface_parse_exceptions(&bundle, &mut report);
 
     if opts.use_reqif_schema {
         check_xsd(&opts, &mut report)?;
@@ -83,7 +135,7 @@ fn check_duplicate_identifiers(bundle: &ReqIfBundle, report: &mut ValidateReport
     let mut check = |id: &str, kind: &str| {
         if !seen.insert(id.to_owned()) {
             report
-                .errors
+                .semantic_warnings
                 .push(format!("duplicate IDENTIFIER {id:?} (in {kind})"));
         }
     };
@@ -154,7 +206,7 @@ fn check_dangling_refs(bundle: &ReqIfBundle, report: &mut ValidateReport) {
     if let Some(objs) = &content.spec_objects {
         for o in objs {
             if !spec_type_ids.contains(o.spec_object_type.as_str()) {
-                report.errors.push(format!(
+                report.semantic_warnings.push(format!(
                     "<SPEC-OBJECT IDENTIFIER={:?}> references unknown SPEC-OBJECT-TYPE-REF {:?}",
                     o.identifier.as_str(),
                     o.spec_object_type.as_str()
@@ -168,7 +220,7 @@ fn check_dangling_refs(bundle: &ReqIfBundle, report: &mut ValidateReport) {
             if let Some(st_ref) = &s.specification_type
                 && !spec_type_ids.contains(st_ref.as_str())
             {
-                report.errors.push(format!(
+                report.semantic_warnings.push(format!(
                     "<SPECIFICATION IDENTIFIER={:?}> references unknown SPECIFICATION-TYPE-REF {:?}",
                     s.identifier.as_str(),
                     st_ref.as_str()
@@ -180,20 +232,74 @@ fn check_dangling_refs(bundle: &ReqIfBundle, report: &mut ValidateReport) {
     if let Some(srs) = &content.spec_relations {
         for sr in srs {
             if !spec_object_ids.contains(sr.source.as_str()) {
-                report.errors.push(format!(
+                report.semantic_warnings.push(format!(
                     "<SPEC-RELATION IDENTIFIER={:?}> source SPEC-OBJECT-REF {:?} not found",
                     sr.identifier.as_str(),
                     sr.source.as_str()
                 ));
             }
             if !spec_object_ids.contains(sr.target.as_str()) {
-                report.errors.push(format!(
+                report.semantic_warnings.push(format!(
                     "<SPEC-RELATION IDENTIFIER={:?}> target SPEC-OBJECT-REF {:?} not found",
                     sr.identifier.as_str(),
                     sr.target.as_str()
                 ));
             }
         }
+    }
+}
+
+/// For every `<SPEC-HIERARCHY>` reachable from any `<SPECIFICATION>`, verify
+/// that its `<OBJECT>/<SPEC-OBJECT-REF>` target exists in the bundle's
+/// [`crate::model::ObjectLookup`]. Walks each specification tree via
+/// [`ReqIfBundle::iterate_specification_hierarchy`].
+fn check_dangling_hierarchy_refs(bundle: &ReqIfBundle, report: &mut ValidateReport) {
+    let Some(cc) = &bundle.core_content else {
+        return;
+    };
+    let Some(content) = &cc.req_if_content else {
+        return;
+    };
+    let Some(specs) = &content.specifications else {
+        return;
+    };
+
+    for spec in specs {
+        for node in bundle.iterate_specification_hierarchy(spec) {
+            if !bundle.lookup.spec_object_exists(&node.spec_object_ref) {
+                report.semantic_warnings.push(format!(
+                    "<SPEC-HIERARCHY IDENTIFIER={:?}> references unknown SPEC-OBJECT-REF {:?}",
+                    node.identifier,
+                    node.spec_object_ref.as_str()
+                ));
+            }
+        }
+    }
+}
+
+/// Mirrors Python's prologue advisories: documents without an XML
+/// declaration and documents declaring a non-UTF-8 encoding both earn a
+/// warning. Both land in [`ValidateReport::semantic_warnings`] (Python
+/// emits them as non-fatal too).
+fn check_xml_prologue(bundle: &ReqIfBundle, report: &mut ValidateReport) {
+    if !bundle.namespace_info.doctype_is_present {
+        report
+            .semantic_warnings
+            .push("Document is missing XML declaration".to_string());
+    }
+    if bundle.namespace_info.encoding.as_deref() != Some("UTF-8") {
+        report
+            .semantic_warnings
+            .push("ReqIF Implementation Guide recommends UTF-8 encoding".to_string());
+    }
+}
+
+/// Forward any [`crate::error::SchemaWarning`]s the parser accumulated
+/// during the most recent parse onto the schema-error tier. The
+/// `SchemaWarning` Display already formats as `"<message> (while <context>)"`.
+fn surface_parse_exceptions(bundle: &ReqIfBundle, report: &mut ValidateReport) {
+    for w in &bundle.exceptions {
+        report.schema_errors.push(w.to_string());
     }
 }
 
@@ -236,7 +342,7 @@ fn check_xsd(opts: &ValidateOpts, report: &mut ValidateReport) -> Result<(), Req
         let msg = String::from_utf8_lossy(&output.stderr);
         for line in msg.lines() {
             if !line.trim().is_empty() {
-                report.errors.push(line.to_owned());
+                report.schema_errors.push(line.to_owned());
             }
         }
     }

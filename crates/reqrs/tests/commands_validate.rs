@@ -16,7 +16,7 @@ fn validate_passes_on_minimal_valid_file() {
         use_reqif_schema: false,
     })
     .unwrap();
-    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    assert!(!r.has_any_errors(), "{r:?}");
 }
 
 #[test]
@@ -30,11 +30,11 @@ fn validate_flags_dangling_spec_object_type_ref() {
     })
     .unwrap();
     assert!(
-        r.errors
+        r.semantic_warnings
             .iter()
             .any(|e| e.contains("unknown SPEC-OBJECT-TYPE-REF")),
-        "expected dangling ref error, got: {:?}",
-        r.errors
+        "expected dangling ref warning, got: {:?}",
+        r.semantic_warnings
     );
 }
 
@@ -49,9 +49,49 @@ fn validate_flags_duplicate_identifiers() {
     })
     .unwrap();
     assert!(
-        r.errors.iter().any(|e| e.contains("duplicate IDENTIFIER")),
-        "expected duplicate IDENTIFIER error, got: {:?}",
-        r.errors
+        r.semantic_warnings
+            .iter()
+            .any(|e| e.contains("duplicate IDENTIFIER")),
+        "expected duplicate IDENTIFIER warning, got: {:?}",
+        r.semantic_warnings
+    );
+}
+
+#[test]
+fn validate_flags_missing_xml_declaration_as_semantic_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("no_decl.reqif");
+    std::fs::write(&p, include_str!("fixtures/missing_xml_decl.reqif")).unwrap();
+    let r = validate(ValidateOpts {
+        input: p,
+        use_reqif_schema: false,
+    })
+    .unwrap();
+    assert!(
+        r.semantic_warnings
+            .iter()
+            .any(|e| e.contains("missing XML declaration")),
+        "expected missing-decl warning, got: {:?}",
+        r.semantic_warnings
+    );
+}
+
+#[test]
+fn validate_flags_dangling_spec_hierarchy_ref() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("dangling_hier.reqif");
+    std::fs::write(&p, include_str!("fixtures/dangling_hierarchy_ref.reqif")).unwrap();
+    let r = validate(ValidateOpts {
+        input: p,
+        use_reqif_schema: false,
+    })
+    .unwrap();
+    assert!(
+        r.semantic_warnings
+            .iter()
+            .any(|e| e.contains("SPEC-HIERARCHY") && e.contains("unknown SPEC-OBJECT-REF")),
+        "expected dangling hierarchy warning, got: {:?}",
+        r.semantic_warnings
     );
 }
 
@@ -85,9 +125,9 @@ fn schema_validation_runs_xmllint_when_available() {
     // This minimal stub parses cleanly but is NOT schema-valid (it lacks
     // the required <THE-HEADER> / <CORE-CONTENT> children of <REQ-IF>).
     // We assert the call completes (returns Ok) and that xmllint's
-    // complaints land in `report.errors` rather than propagating as an
-    // error — that's the contract: schema errors are reportable, not
-    // fatal.
+    // complaints land in `report.schema_errors` rather than propagating
+    // as an error — that's the contract: schema errors are reportable,
+    // not fatal.
     std::fs::write(
         &p,
         r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -101,8 +141,8 @@ fn schema_validation_runs_xmllint_when_available() {
     })
     .expect("schema validation should not propagate xmllint errors as Err");
     assert!(
-        !report.errors.is_empty(),
+        !report.schema_errors.is_empty(),
         "minimal stub should fail XSD validation (missing required children); \
-         got an empty error list — wiring is wrong"
+         got an empty schema_errors list — wiring is wrong"
     );
 }

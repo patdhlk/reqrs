@@ -82,10 +82,16 @@ fn run() -> Result<ExitCode> {
                 input,
                 use_reqif_schema,
             })?;
-            if !report.errors.is_empty() {
-                for e in &report.errors {
-                    eprintln!("{e}");
-                }
+            for e in &report.xml_errors {
+                eprintln!("error: {e}");
+            }
+            for e in &report.schema_errors {
+                eprintln!("warning: schema: {e}");
+            }
+            for e in &report.semantic_warnings {
+                eprintln!("warning: semantic: {e}");
+            }
+            if report.has_any_errors() {
                 return Ok(ExitCode::from(1));
             }
         }
