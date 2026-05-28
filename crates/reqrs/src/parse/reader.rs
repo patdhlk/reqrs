@@ -8,7 +8,6 @@ pub(crate) struct ReqIfReader<'a> {
 }
 
 impl<'a> ReqIfReader<'a> {
-    #[allow(dead_code)]
     pub fn new(src: &'a [u8]) -> Self {
         let mut inner = Reader::from_reader(src);
         inner.config_mut().trim_text(false);
@@ -18,13 +17,10 @@ impl<'a> ReqIfReader<'a> {
         }
     }
 
-    // Consumed by parsers landing in later tasks (header, data_type, …).
-    #[allow(dead_code)]
     pub fn buffer_position(&self) -> usize {
         self.inner.buffer_position() as usize
     }
 
-    #[allow(dead_code)]
     pub fn read_event(&mut self) -> Result<Event<'_>, ReqIfError> {
         self.buf.clear();
         self.inner
@@ -37,7 +33,6 @@ impl<'a> ReqIfReader<'a> {
 
     /// Returns the text content of the current element (assumes the
     /// next event is Text or End). Reads until matching end tag.
-    #[allow(dead_code)]
     pub fn read_text_to_end(&mut self, end: &BytesEnd<'_>) -> Result<String, ReqIfError> {
         let name = end.name().as_ref().to_vec();
         let mut out = String::new();
@@ -104,7 +99,6 @@ impl<'a> ReqIfReader<'a> {
 }
 
 /// Look up a required attribute on a start event, returning a descriptive error otherwise.
-#[allow(dead_code)]
 pub(crate) fn required_attr(start: &BytesStart<'_>, name: &str) -> Result<String, ReqIfError> {
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == name.as_bytes() {

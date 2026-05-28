@@ -4,7 +4,8 @@
 
 pub mod error;
 pub mod ids;
-mod parse;
+pub mod model;
+pub mod parse;
 pub mod unparse;
 
 pub use error::{ReqIfError, SchemaWarning};
