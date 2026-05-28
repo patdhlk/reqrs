@@ -35,7 +35,7 @@ pub use header::{RepositoryId, ReqIfHeader};
 pub use lookup::ObjectLookup;
 pub use namespace::NamespaceInfo;
 pub use relation_group::RelationGroup;
-pub use spec_hierarchy::SpecHierarchy;
+pub use spec_hierarchy::{SpecHierarchy, SpecHierarchyIter};
 pub use spec_object::{SpecObject, SpecObjectChildTag};
 pub use spec_relation::{SpecRelation, SpecRelationChildTag};
 pub use spec_type::{

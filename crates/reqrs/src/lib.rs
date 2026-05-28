@@ -8,6 +8,7 @@ pub mod ids;
 pub mod model;
 pub mod parse;
 pub mod reqifz;
+pub mod specification_iterator;
 pub mod unparse;
 
 pub use error::{ReqIfError, SchemaWarning};
@@ -17,4 +18,5 @@ pub use ids::{
 };
 pub use parse::ReqIfParser;
 pub use reqifz::ReqIfzBundle;
+pub use specification_iterator::SpecificationIterator;
 pub use unparse::{FormatMode, ReqIfUnparser};
