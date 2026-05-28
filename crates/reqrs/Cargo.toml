@@ -11,7 +11,7 @@ quick-xml.workspace = true
 thiserror.workspace = true
 zip.workspace = true
 chrono.workspace = true
-rustc-hash.workspace = true
+sha2.workspace = true
 include_dir.workspace = true
 tempfile.workspace = true
 

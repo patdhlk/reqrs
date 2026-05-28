@@ -33,7 +33,35 @@ fn anonymize_replaces_user_visible_strings_deterministically() {
     let b = std::fs::read_to_string(&out2).unwrap();
     assert_eq!(a, b, "same seed must produce identical output");
     assert!(!a.contains("Secret Title"));
-    assert!(a.contains("Anonymized-"));
+    assert!(a.contains("...Anonymized-"));
+}
+
+/// Python parity gate: with `seed = 0` the anonymizer must produce the same
+/// `...Anonymized-N...` digits as the upstream Python `reqif anonymize`
+/// command (`int(sha256(s).hexdigest(), 16) % 10**10`). The expected hash
+/// below was computed via:
+///
+/// ```text
+/// python3 -c "import hashlib; print(int(hashlib.sha256(b'Secret Title').hexdigest(), 16) % 10**10)"
+/// ```
+#[test]
+fn anonymize_output_matches_python_byte_exact_with_seed_zero() {
+    const EXPECTED: &str = "...Anonymized-2000798678...";
+    let dir = tempfile::tempdir().unwrap();
+    let in_path = dir.path().join("in.reqif");
+    let out_path = dir.path().join("out.reqif");
+    std::fs::write(&in_path, SAMPLE).unwrap();
+    anonymize(AnonymizeOpts {
+        input: in_path,
+        output: out_path.clone(),
+        seed: 0,
+    })
+    .unwrap();
+    let written = std::fs::read_to_string(&out_path).unwrap();
+    assert!(
+        written.contains(EXPECTED),
+        "expected output to contain {EXPECTED}; got:\n{written}"
+    );
 }
 
 const SAMPLE_WITH_SPEC: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -77,7 +105,7 @@ fn anonymize_replaces_specification_long_name() {
         !out.contains("Spec Doc"),
         "specification LONG-NAME must be anonymized; got:\n{out}"
     );
-    assert!(out.contains("Anonymized-"));
+    assert!(out.contains("...Anonymized-"));
 }
 
 const SAMPLE_WITH_XHTML: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -143,7 +171,7 @@ fn anonymize_wraps_xhtml_value_in_xhtml_div() {
         "original XHTML content must be replaced; got:\n{out}"
     );
     assert!(
-        out.contains("<xhtml:div>Anonymized-"),
+        out.contains("<xhtml:div>...Anonymized-"),
         "anonymized XHTML must be wrapped in <xhtml:div>; got:\n{out}"
     );
 }

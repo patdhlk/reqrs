@@ -72,5 +72,5 @@ fn cli_anonymize_uses_seed_flag() {
         .success();
     let written = std::fs::read_to_string(&out_path).unwrap();
     assert!(!written.contains("Secret"));
-    assert!(written.contains("Anonymized-"));
+    assert!(written.contains("...Anonymized-"));
 }

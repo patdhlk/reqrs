@@ -1,9 +1,17 @@
 //! `anonymize` command — strip user-visible strings while preserving structure.
 //!
 //! Mirrors `strict-doc-reqif/reqif/commands/anonymize/anonymize.py`. Every
-//! user-visible string in the bundle is replaced with `Anonymized-<digits>`,
-//! where `<digits>` is a [`rustc_hash::FxHasher`] of the seed concatenated
-//! with the original string. Two consequences:
+//! user-visible string in the bundle is replaced with `...Anonymized-N...`,
+//! where `N` is `int(sha256(input).hexdigest(), 16) % 10^10`.
+//!
+//! With `seed = 0` (the default), output is byte-identical to the Python
+//! `reqif anonymize` command.
+//!
+//! With a non-zero seed, the seed bytes are mixed into the SHA-256 input,
+//! producing deterministic-but-non-Python output. Useful for users who need
+//! cross-run output variation while keeping within-run determinism.
+//!
+//! Two consequences of the deterministic hashing strategy:
 //!
 //! - Same input + same `seed` → byte-identical output (deterministic within
 //!   a run and across reruns).
@@ -21,7 +29,7 @@
 //!   attribute values inside `values`.
 //!
 //! For `Xhtml` attribute values, the original raw markup is replaced with
-//! `<xhtml:div>Anonymized-<digits></xhtml:div>` so the output remains
+//! `<xhtml:div>...Anonymized-N...</xhtml:div>` so the output remains
 //! well-formed XHTML. This assumes the source bundle declares the
 //! `xmlns:xhtml` namespace — which any document carrying XHTML values
 //! necessarily does.
@@ -32,10 +40,9 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
 
-use rustc_hash::FxBuildHasher;
+use sha2::{Digest, Sha256};
 
 use crate::error::ReqIfError;
 use crate::model::{AttributeValue, DataType, RepositoryId, ReqIfBundle, SpecObject};
@@ -79,11 +86,24 @@ impl AnonState {
         if let Some(v) = self.cache.get(s) {
             return v.clone();
         }
-        let mut h = FxBuildHasher.build_hasher();
-        h.write_u64(self.seed);
-        h.write(s.as_bytes());
-        let digit = h.finish();
-        let out = format!("Anonymized-{digit}");
+        let mut hasher = Sha256::new();
+        if self.seed != 0 {
+            // Seeded mode: prefix the input with the seed bytes so output
+            // diverges from Python's byte-exact behavior but stays
+            // deterministic per (seed, input) pair.
+            hasher.update(self.seed.to_le_bytes());
+        }
+        hasher.update(s.as_bytes());
+        let digest = hasher.finalize();
+        // Compute `int(hexdigest, 16) % 10^10` over the full 32-byte digest.
+        // Streaming base-256 modular arithmetic gives the same answer as
+        // Python's `int(hex, 16) % 10**10` because mod commutes with the
+        // base-256 Horner evaluation of the digest.
+        let mut remainder: u128 = 0;
+        for &byte in digest.iter() {
+            remainder = (remainder * 256 + u128::from(byte)) % 10_000_000_000_u128;
+        }
+        let out = format!("...Anonymized-{remainder}...");
         self.cache.insert(s.to_owned(), out.clone());
         out
     }
@@ -159,7 +179,7 @@ fn anon_spec_object(o: &mut SpecObject, state: &mut AnonState) {
 /// Anonymize a single `<ATTRIBUTE-VALUE-*>` in place. Shared by [`SpecObject`]
 /// attributes and `<SPECIFICATION>` `<VALUES>` blocks.
 ///
-/// - `String` → opaque `Anonymized-<digits>` token.
+/// - `String` → opaque `...Anonymized-N...` token.
 /// - `Xhtml` → token wrapped in `<xhtml:div>…</xhtml:div>` so the output is
 ///   still well-formed XHTML (Python parity).
 /// - INTEGER / REAL / DATE / BOOLEAN / ENUMERATION are not free-text and are
