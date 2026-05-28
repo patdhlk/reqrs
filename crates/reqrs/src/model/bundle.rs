@@ -10,6 +10,11 @@
 //!   `<TOOL-EXTENSIONS>` element. We don't yet model the contents of tool
 //!   extensions (vendor-specific opaque XML); this boolean simply records
 //!   that the tag was present so the unparser can re-emit a placeholder.
+//! - `tool_extensions_empty_open_close` — companion of
+//!   `tool_extensions_tag_exists`. True iff the source spelled the (empty)
+//!   tag as `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (open/close form);
+//!   false means `<TOOL-EXTENSIONS/>` (self-closed) or the bundle is
+//!   synthetic. Only consulted when `tool_extensions_tag_exists` is true.
 //! - [`ObjectLookup`] — pre-built indexes for reference resolution.
 //! - `exceptions` — non-fatal [`SchemaWarning`]s accumulated during parse.
 //!
@@ -29,6 +34,10 @@ pub struct ReqIfBundle {
     pub header: Option<ReqIfHeader>,
     pub core_content: Option<CoreContent>,
     pub tool_extensions_tag_exists: bool,
+    /// True iff the source had the empty open/close form
+    /// `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n`. Ignored when
+    /// `tool_extensions_tag_exists` is false.
+    pub tool_extensions_empty_open_close: bool,
     pub lookup: ObjectLookup,
     pub exceptions: Vec<SchemaWarning>,
 }
@@ -50,6 +59,7 @@ impl ReqIfBundle {
             header: None,
             core_content: None,
             tool_extensions_tag_exists: false,
+            tool_extensions_empty_open_close: false,
             lookup: ObjectLookup::empty(),
             exceptions: Vec::new(),
         }

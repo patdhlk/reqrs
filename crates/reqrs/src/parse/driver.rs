@@ -50,6 +50,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
             header: None,
             core_content: None,
             tool_extensions_tag_exists: false,
+            tool_extensions_empty_open_close: false,
             lookup: ObjectLookup::empty(),
             exceptions: Vec::new(),
         });
@@ -58,6 +59,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
     let mut header: Option<ReqIfHeader> = None;
     let mut core_content: Option<CoreContent> = None;
     let mut tool_extensions_tag_exists = false;
+    let mut tool_extensions_empty_open_close = false;
     let mut exceptions: Vec<SchemaWarning> = Vec::new();
 
     loop {
@@ -81,7 +83,14 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
                     b"TOOL-EXTENSIONS" => {
                         tool_extensions_tag_exists = true;
                         let owned = s.into_owned();
-                        r.skip_to_end(&owned)?;
+                        // Walk to the matching end, noting whether the body
+                        // contained any element child (Start or Empty). If it
+                        // did not, the source spelled the tag as
+                        // `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (empty
+                        // open/close form) and we must preserve that on
+                        // round-trip — `<TOOL-EXTENSIONS/>` is byte-distinct.
+                        tool_extensions_empty_open_close =
+                            scan_tool_extensions_empty(&mut r, &owned)?;
                     }
                     _ => {
                         exceptions.push(
@@ -150,6 +159,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
         header,
         core_content,
         tool_extensions_tag_exists,
+        tool_extensions_empty_open_close,
         lookup,
         exceptions,
     })
@@ -315,22 +325,34 @@ fn parse_req_if_content(
                 let owned = s.into_owned();
                 match name.as_slice() {
                     b"DATATYPES" => {
-                        content.data_types = Some(parse_data_types(r)?);
+                        let v = parse_data_types(r)?;
+                        content.list_forms.data_types_empty_open_close = v.is_empty();
+                        content.data_types = Some(v);
                     }
                     b"SPEC-TYPES" => {
-                        content.spec_types = Some(parse_spec_types(r)?);
+                        let v = parse_spec_types(r)?;
+                        content.list_forms.spec_types_empty_open_close = v.is_empty();
+                        content.spec_types = Some(v);
                     }
                     b"SPEC-OBJECTS" => {
-                        content.spec_objects = Some(parse_spec_objects(r)?);
+                        let v = parse_spec_objects(r)?;
+                        content.list_forms.spec_objects_empty_open_close = v.is_empty();
+                        content.spec_objects = Some(v);
                     }
                     b"SPEC-RELATIONS" => {
-                        content.spec_relations = Some(parse_spec_relations(r)?);
+                        let v = parse_spec_relations(r)?;
+                        content.list_forms.spec_relations_empty_open_close = v.is_empty();
+                        content.spec_relations = Some(v);
                     }
                     b"SPECIFICATIONS" => {
-                        content.specifications = Some(parse_specifications(r)?);
+                        let v = parse_specifications(r)?;
+                        content.list_forms.specifications_empty_open_close = v.is_empty();
+                        content.specifications = Some(v);
                     }
                     b"SPEC-RELATION-GROUPS" => {
-                        content.relation_groups = Some(parse_relation_groups(r)?);
+                        let v = parse_relation_groups(r)?;
+                        content.list_forms.relation_groups_empty_open_close = v.is_empty();
+                        content.relation_groups = Some(v);
                     }
                     _ => {
                         exceptions.push(
@@ -539,6 +561,56 @@ fn parse_relation_groups(
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
                     msg: "EOF inside <SPEC-RELATION-GROUPS>".into(),
+                });
+            }
+            _ => continue,
+        }
+    }
+}
+
+/// Consume the body of a `<TOOL-EXTENSIONS>` block (caller has just read the
+/// Start event) up to and including the matching `</TOOL-EXTENSIONS>`.
+/// Returns `true` iff the body contained no element children — i.e. the
+/// source was `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (empty open/close
+/// form), not `<TOOL-EXTENSIONS><child/>...</TOOL-EXTENSIONS>`.
+///
+/// We treat both `Event::Start` and `Event::Empty` as "had a child"; pure
+/// `Text` (whitespace, comments) does NOT count as content because the
+/// unparser's placeholder body is also pure whitespace, so any content here
+/// has already been lost to the model and we can only honor the empty/non-empty
+/// distinction.
+fn scan_tool_extensions_empty(
+    r: &mut ReqIfReader<'_>,
+    start: &BytesStart<'_>,
+) -> Result<bool, ReqIfError> {
+    let name = start.name().as_ref().to_vec();
+    let mut had_child = false;
+    let mut depth = 1usize;
+    loop {
+        match r.read_event()? {
+            Event::Start(s) => {
+                if depth == 1 {
+                    had_child = true;
+                }
+                if s.name().as_ref() == name.as_slice() {
+                    depth += 1;
+                }
+            }
+            Event::Empty(_) => {
+                if depth == 1 {
+                    had_child = true;
+                }
+            }
+            Event::End(e) if e.name().as_ref() == name.as_slice() => {
+                depth -= 1;
+                if depth == 0 {
+                    return Ok(!had_child);
+                }
+            }
+            Event::Eof => {
+                return Err(ReqIfError::Xml {
+                    pos: r.buffer_position(),
+                    msg: "EOF inside <TOOL-EXTENSIONS>".into(),
                 });
             }
             _ => continue,

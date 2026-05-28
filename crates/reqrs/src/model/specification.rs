@@ -35,4 +35,14 @@ pub struct Specification {
     /// Source order of `<TYPE>`, `<CHILDREN>`, `<VALUES>` children — recorded
     /// only for children actually present in the source.
     pub children_order: Vec<SpecificationChildTag>,
+    /// True iff the source had `<CHILDREN>\n          </CHILDREN>\n` (empty
+    /// open/close form). False (default) means the source had `<CHILDREN/>`
+    /// or `children` is `None` or non-empty. The unparser consults this flag
+    /// only when `children` is `Some(vec![])`; otherwise it has no effect.
+    /// Synthetic Specifications built via field init leave this `false`,
+    /// matching the legacy self-closed default.
+    pub children_empty_open_close: bool,
+    /// True iff the source had `<VALUES>\n          </VALUES>\n` (empty
+    /// open/close form). Same semantics as [`Self::children_empty_open_close`].
+    pub values_empty_open_close: bool,
 }

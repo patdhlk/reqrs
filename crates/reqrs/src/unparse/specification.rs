@@ -104,7 +104,13 @@ fn emit_children(out: &mut String, s: &Specification) {
     };
     if children.is_empty() {
         out.push_str(CHILD_INDENT);
-        out.push_str("<CHILDREN/>\n");
+        if s.children_empty_open_close {
+            out.push_str("<CHILDREN>\n");
+            out.push_str(CHILD_INDENT);
+            out.push_str("</CHILDREN>\n");
+        } else {
+            out.push_str("<CHILDREN/>\n");
+        }
         return;
     }
     out.push_str(CHILD_INDENT);
@@ -122,7 +128,13 @@ fn emit_values(out: &mut String, s: &Specification) {
     };
     if values.is_empty() {
         out.push_str(CHILD_INDENT);
-        out.push_str("<VALUES/>\n");
+        if s.values_empty_open_close {
+            out.push_str("<VALUES>\n");
+            out.push_str(CHILD_INDENT);
+            out.push_str("</VALUES>\n");
+        } else {
+            out.push_str("<VALUES/>\n");
+        }
         return;
     }
     out.push_str(CHILD_INDENT);

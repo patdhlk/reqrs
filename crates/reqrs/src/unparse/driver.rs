@@ -7,7 +7,9 @@
 //!   [`NamespaceInfo::doctype_is_present`]),
 //! - reconstructs the `<REQ-IF ...>` opener with attributes in canonical order,
 //! - delegates each per-element block to the appropriate `unparse_*` helper,
-//! - re-emits a `<TOOL-EXTENSIONS/>` placeholder when the parsed source had one.
+//! - re-emits a `<TOOL-EXTENSIONS>` placeholder when the parsed source had
+//!   one, choosing self-closed vs open/close per
+//!   `tool_extensions_empty_open_close`.
 //!
 //! Attribute order on the root opener: `xmlns`, `xmlns:xsi`,
 //! `xmlns:configuration`, `xmlns:id`, `xmlns:xhtml`, `xsi:schemaLocation`,
@@ -51,9 +53,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
         if let Some(content) = &core_content.req_if_content {
             out.push_str("    <REQ-IF-CONTENT>\n");
 
+            let forms = &content.list_forms;
+
             if let Some(data_types) = &content.data_types {
                 if data_types.is_empty() {
-                    out.push_str("      <DATATYPES/>\n");
+                    push_empty_container(&mut out, "DATATYPES", forms.data_types_empty_open_close);
                 } else {
                     out.push_str("      <DATATYPES>\n");
                     for dt in data_types {
@@ -65,7 +69,7 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
 
             if let Some(spec_types) = &content.spec_types {
                 if spec_types.is_empty() {
-                    out.push_str("      <SPEC-TYPES/>\n");
+                    push_empty_container(&mut out, "SPEC-TYPES", forms.spec_types_empty_open_close);
                 } else {
                     out.push_str("      <SPEC-TYPES>\n");
                     // unparse_spec_type dispatches per-variant internally, so no
@@ -80,7 +84,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
 
             if let Some(spec_objects) = &content.spec_objects {
                 if spec_objects.is_empty() {
-                    out.push_str("      <SPEC-OBJECTS/>\n");
+                    push_empty_container(
+                        &mut out,
+                        "SPEC-OBJECTS",
+                        forms.spec_objects_empty_open_close,
+                    );
                 } else {
                     out.push_str("      <SPEC-OBJECTS>\n");
                     for so in spec_objects {
@@ -92,7 +100,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
 
             if let Some(spec_relations) = &content.spec_relations {
                 if spec_relations.is_empty() {
-                    out.push_str("      <SPEC-RELATIONS/>\n");
+                    push_empty_container(
+                        &mut out,
+                        "SPEC-RELATIONS",
+                        forms.spec_relations_empty_open_close,
+                    );
                 } else {
                     out.push_str("      <SPEC-RELATIONS>\n");
                     for sr in spec_relations {
@@ -104,7 +116,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
 
             if let Some(specs) = &content.specifications {
                 if specs.is_empty() {
-                    out.push_str("      <SPECIFICATIONS/>\n");
+                    push_empty_container(
+                        &mut out,
+                        "SPECIFICATIONS",
+                        forms.specifications_empty_open_close,
+                    );
                 } else {
                     out.push_str("      <SPECIFICATIONS>\n");
                     for spec in specs {
@@ -116,7 +132,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
 
             if let Some(groups) = &content.relation_groups {
                 if groups.is_empty() {
-                    out.push_str("      <SPEC-RELATION-GROUPS/>\n");
+                    push_empty_container(
+                        &mut out,
+                        "SPEC-RELATION-GROUPS",
+                        forms.relation_groups_empty_open_close,
+                    );
                 } else {
                     out.push_str("      <SPEC-RELATION-GROUPS>\n");
                     for rg in groups {
@@ -132,12 +152,19 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
     }
 
     if bundle.tool_extensions_tag_exists {
-        // Python re-emits as `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (open
-        // + close on separate lines). For v1 we collapse to self-closed: every
-        // fixture we have either has an open/close pair with no body or a
-        // self-closed empty. Both forms semantically denote the same content.
-        // If round-trip on the corpus shows divergence we'll widen this.
-        out.push_str("  <TOOL-EXTENSIONS/>\n");
+        // Honor the source form per `tool_extensions_empty_open_close`. For
+        // synthetic bundles (default `false`) we keep the legacy self-closed
+        // form; for parsed bundles whose source used
+        // `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` we reproduce it
+        // byte-exact. Note: we have no model for the body contents, so an
+        // open/close form with actual child elements would still round-trip
+        // to an empty open/close body — fine for the corpus, where every
+        // observed TOOL-EXTENSIONS body is empty.
+        if bundle.tool_extensions_empty_open_close {
+            out.push_str("  <TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n");
+        } else {
+            out.push_str("  <TOOL-EXTENSIONS/>\n");
+        }
     }
 
     out.push_str("</REQ-IF>\n");
@@ -195,6 +222,31 @@ fn write_root_opener(out: &mut String, ns: &NamespaceInfo, self_closed: bool) {
         out.push_str("/>\n");
     } else {
         out.push_str(">\n");
+    }
+}
+
+/// Emit an empty `<REQ-IF-CONTENT>` container in whichever spelling the
+/// source used.
+///
+/// `open_close` is sourced from the matching flag on
+/// [`crate::model::ListForms`]:
+///
+/// - `true` — the source had `<X>\n      </X>\n` (open/close, no children).
+///   Reproduce that byte-for-byte.
+/// - `false` — the source had `<X/>` (self-closed), OR the bundle is synthetic
+///   (built via [`Default`]) and never went through the parser. In both cases
+///   the self-closed form is the right default.
+fn push_empty_container(out: &mut String, tag: &str, open_close: bool) {
+    if open_close {
+        out.push_str("      <");
+        out.push_str(tag);
+        out.push_str(">\n      </");
+        out.push_str(tag);
+        out.push_str(">\n");
+    } else {
+        out.push_str("      <");
+        out.push_str(tag);
+        out.push_str("/>\n");
     }
 }
 

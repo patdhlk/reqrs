@@ -71,6 +71,8 @@ pub(crate) fn parse_specification_inner(
             values: None,
             children: None,
             children_order: Vec::new(),
+            children_empty_open_close: false,
+            values_empty_open_close: false,
         });
     }
 
@@ -78,6 +80,8 @@ pub(crate) fn parse_specification_inner(
     let mut values: Option<Vec<AttributeValue>> = None;
     let mut children: Option<Vec<SpecHierarchy>> = None;
     let mut children_order: Vec<SpecificationChildTag> = Vec::with_capacity(3);
+    let mut children_empty_open_close = false;
+    let mut values_empty_open_close = false;
 
     loop {
         match r.read_event()? {
@@ -87,7 +91,9 @@ pub(crate) fn parse_specification_inner(
             }
             Event::Start(s) if s.name().as_ref() == b"CHILDREN" => {
                 children_order.push(SpecificationChildTag::Children);
-                children = Some(read_children(r)?);
+                let kids = read_children(r)?;
+                children_empty_open_close = kids.is_empty();
+                children = Some(kids);
             }
             Event::Empty(s) if s.name().as_ref() == b"CHILDREN" => {
                 let _ = s;
@@ -96,7 +102,9 @@ pub(crate) fn parse_specification_inner(
             }
             Event::Start(s) if s.name().as_ref() == b"VALUES" => {
                 children_order.push(SpecificationChildTag::Values);
-                values = Some(parse_attribute_values_inner(r)?);
+                let vs = parse_attribute_values_inner(r)?;
+                values_empty_open_close = vs.is_empty();
+                values = Some(vs);
             }
             Event::Empty(s) if s.name().as_ref() == b"VALUES" => {
                 let _ = s;
@@ -113,6 +121,8 @@ pub(crate) fn parse_specification_inner(
                     values,
                     children,
                     children_order,
+                    children_empty_open_close,
+                    values_empty_open_close,
                 });
             }
             Event::Eof => {

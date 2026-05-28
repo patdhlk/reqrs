@@ -67,13 +67,11 @@ const KNOWN_FAILURES: &[&str] = &[
     // (empty paired-tag SPEC-RELATIONS / SPEC-RELATION-GROUPS), not Mode 2 —
     // and are listed below under Mode 3.
     // Mode 3: empty paired-tag container collapsed to self-closed.
-    "reqif_software/Doors/01_anonimized_example_date_data_type/sample.reqif",
-    "reqif_software/Doors/02_example_from_a_user/sample.reqif",
-    "reqif_software/Doors/04_example_from_a_user/sample.reqif",
-    "reqif_software/Doors/06_example_from_a_user/sample.reqif",
-    "reqif_software/Doors/10_example_capella_requirements_vp/sample.reqif",
-    "examples/02_read_reqif/input.reqif",
-    "examples/04_convert_reqif_to_json/sample2_sdoc.reqif",
+    // FIXED 2026-05-28 (Task 25): ReqIfContent.list_forms now tracks the
+    // per-container empty-emission shape; the parser records `<X></X>` form
+    // when it sees an Event::Start with no children, and the unparser
+    // consults the flag to emit the matching shape (falling back to the
+    // self-closed form for synthetic bundles built via Default).
 ];
 
 #[test]
