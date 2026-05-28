@@ -17,6 +17,14 @@
 //! - [`DataTypeCommon`]: `description`, `long_name`.
 //! - [`SpecObject`]: `description`, `long_name`, plus `String` and `Xhtml`
 //!   attribute values.
+//! - [`Specification`]: `description`, `long_name`, plus `String` and `Xhtml`
+//!   attribute values inside `values`.
+//!
+//! For `Xhtml` attribute values, the original raw markup is replaced with
+//! `<xhtml:div>Anonymized-<digits></xhtml:div>` so the output remains
+//! well-formed XHTML. This assumes the source bundle declares the
+//! `xmlns:xhtml` namespace — which any document carrying XHTML values
+//! necessarily does.
 //!
 //! Identifiers, dates, numeric values, enum keys, and boolean flags are
 //! left intact so the document remains structurally valid and references
@@ -126,17 +134,43 @@ fn anon_bundle(bundle: &mut ReqIfBundle, state: &mut AnonState) {
             anon_spec_object(o, state);
         }
     }
+
+    if let Some(specs) = &mut content.specifications {
+        for s in specs {
+            anon_opt(&mut s.long_name, state);
+            anon_opt(&mut s.description, state);
+            if let Some(values) = &mut s.values {
+                for v in values {
+                    anon_attribute_value(v, state);
+                }
+            }
+        }
+    }
 }
 
 fn anon_spec_object(o: &mut SpecObject, state: &mut AnonState) {
     anon_opt(&mut o.description, state);
     anon_opt(&mut o.long_name, state);
     for v in &mut o.attributes {
-        match v {
-            AttributeValue::String(s) => s.value = state.map(&s.value),
-            AttributeValue::Xhtml(x) => x.the_value_raw = state.map(&x.the_value_raw),
-            // INTEGER / REAL / DATE / BOOLEAN / ENUMERATION are not free-text — leave intact.
-            _ => {}
+        anon_attribute_value(v, state);
+    }
+}
+
+/// Anonymize a single `<ATTRIBUTE-VALUE-*>` in place. Shared by [`SpecObject`]
+/// attributes and `<SPECIFICATION>` `<VALUES>` blocks.
+///
+/// - `String` → opaque `Anonymized-<digits>` token.
+/// - `Xhtml` → token wrapped in `<xhtml:div>…</xhtml:div>` so the output is
+///   still well-formed XHTML (Python parity).
+/// - INTEGER / REAL / DATE / BOOLEAN / ENUMERATION are not free-text and are
+///   left intact.
+fn anon_attribute_value(v: &mut AttributeValue, state: &mut AnonState) {
+    match v {
+        AttributeValue::String(s) => s.value = state.map(&s.value),
+        AttributeValue::Xhtml(x) => {
+            let anonymized = state.map(&x.the_value_raw);
+            x.the_value_raw = format!("<xhtml:div>{anonymized}</xhtml:div>");
         }
+        _ => {}
     }
 }
