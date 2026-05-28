@@ -6,6 +6,7 @@ pub mod error;
 pub mod ids;
 pub mod model;
 pub mod parse;
+pub mod reqifz;
 pub mod unparse;
 
 pub use error::{ReqIfError, SchemaWarning};
@@ -14,4 +15,5 @@ pub use ids::{
     SpecTypeId, SpecificationId,
 };
 pub use parse::ReqIfParser;
+pub use reqifz::ReqIfzBundle;
 pub use unparse::{FormatMode, ReqIfUnparser};
