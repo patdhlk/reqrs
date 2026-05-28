@@ -16,7 +16,7 @@ use crate::model::ReqIfBundle;
 
 /// Top-level entry point: parse a full `<REQ-IF>` document.
 ///
-/// All three constructors funnel through [`driver::parse_bundle`]. Cloning is
+/// All three constructors funnel through `driver::parse_bundle`. Cloning is
 /// free — this is a unit struct.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ReqIfParser;
@@ -29,7 +29,7 @@ impl ReqIfParser {
     }
 
     /// Parse from a raw byte slice. The XML prologue + encoding are sniffed
-    /// from the first 200 bytes; see [`driver::parse_bundle`] for details.
+    /// from the first 200 bytes; see `driver::parse_bundle` for details.
     pub fn parse_bytes(b: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
         driver::parse_bundle(b)
     }

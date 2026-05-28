@@ -41,10 +41,10 @@ use crate::model::{
 /// - [`ToolExtensions::EmptyOpenClose`] — the source spelled it
 ///   `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (open/close pair with
 ///   whitespace-only body).
-/// - [`ToolExtensions::Content(raw)`] — the source had non-whitespace content
+/// - `ToolExtensions::Content` — the source had non-whitespace content
 ///   between the open and close tags. `raw` holds the inner bytes verbatim
 ///   (leading/trailing whitespace included) so the unparser can splice them
-///   back unchanged. This mirrors the [`crate::parse::reader::ReqIfReader::capture_inner_raw`]
+///   back unchanged. This mirrors the `ReqIfReader::capture_inner_raw`
 ///   pattern used for XHTML attribute values.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum ToolExtensions {

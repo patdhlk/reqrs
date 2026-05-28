@@ -2,7 +2,7 @@
 //!
 //! Mirrors `strict-doc-reqif/reqif/parsers/specification_parser.py`. The
 //! public [`parse_specification`] entry scans for the first start event and
-//! defers to the `pub(crate)` inner routine [`parse_specification_inner`],
+//! defers to the `pub(crate)` inner routine `parse_specification_inner`,
 //! which is the function the future `<SPECIFICATIONS>` list driver will call
 //! once it has discriminated `Start` vs `Empty` events.
 //!
@@ -23,7 +23,7 @@ use quick_xml::events::{BytesStart, Event};
 
 /// Standalone entry point — typically used by integration tests and list-driver
 /// code. Scans for the first `<SPECIFICATION>` start event then defers to
-/// [`parse_specification_inner`].
+/// `parse_specification_inner`.
 pub fn parse_specification(xml: &str) -> Result<Specification, ReqIfError> {
     let mut r = ReqIfReader::new(xml.as_bytes());
     loop {

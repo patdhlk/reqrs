@@ -19,7 +19,7 @@ use quick_xml::events::{BytesStart, Event};
 
 /// Standalone entry point — typically used by integration tests and list-driver
 /// code. Scans for the first `<SPEC-HIERARCHY>` start event then defers to
-/// [`parse_spec_hierarchy_inner`] with `level = 1`.
+/// `parse_spec_hierarchy_inner` with `level = 1`.
 pub fn parse_spec_hierarchy(xml: &str) -> Result<SpecHierarchy, ReqIfError> {
     let mut r = ReqIfReader::new(xml.as_bytes());
     loop {

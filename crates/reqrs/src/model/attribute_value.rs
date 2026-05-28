@@ -117,7 +117,7 @@ pub struct AttributeValueDate {
 ///
 /// `the_value_raw` holds the verbatim bytes between `<THE-VALUE>` and
 /// `</THE-VALUE>` — escaping, whitespace, and child markup are preserved
-/// byte-exact via [`crate::parse::reader::ReqIfReader::capture_inner_raw`].
+/// byte-exact via `ReqIfReader::capture_inner_raw`.
 ///
 /// `was_definition_first` is `true` when the source had `<DEFINITION>` before
 /// `<THE-VALUE>`, and `false` when the source had `<THE-VALUE>` before

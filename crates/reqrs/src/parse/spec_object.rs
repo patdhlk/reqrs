@@ -2,7 +2,7 @@
 //!
 //! Mirrors `strict-doc-reqif/reqif/parsers/spec_object_parser.py`. The public
 //! [`parse_spec_object`] entry scans for the first start event and defers to
-//! the `pub(crate)` inner routine [`parse_spec_object_inner`], which is the
+//! the `pub(crate)` inner routine `parse_spec_object_inner`, which is the
 //! function the future `<SPEC-OBJECTS>` list driver (Task 14) will call once
 //! it has discriminated `Start` vs `Empty` events.
 //!
@@ -21,7 +21,7 @@ use quick_xml::events::{BytesStart, Event};
 
 /// Standalone entry point — typically used by integration tests and list-driver
 /// code. Scans for the first `<SPEC-OBJECT>` start event then defers to
-/// [`parse_spec_object_inner`].
+/// `parse_spec_object_inner`.
 pub fn parse_spec_object(xml: &str) -> Result<SpecObject, ReqIfError> {
     let mut r = ReqIfReader::new(xml.as_bytes());
     loop {

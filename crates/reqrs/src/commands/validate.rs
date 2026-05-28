@@ -27,7 +27,7 @@
 //!   with Python's `ReqIFErrorBundle.xml_errors` and gives the CLI a
 //!   stable place to surface future parse-recovery diagnostics.
 //! - [`ValidateReport::schema_errors`] — XSD violations reported by
-//!   `xmllint` plus any [`SchemaWarning`]s the parser accumulated on
+//!   `xmllint` plus any [`crate::error::SchemaWarning`]s the parser accumulated on
 //!   [`ReqIfBundle::exceptions`].
 //! - [`ValidateReport::semantic_warnings`] — everything else: duplicate
 //!   IDENTIFIERs, dangling refs, missing XML declaration, non-UTF-8

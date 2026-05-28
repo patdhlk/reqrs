@@ -4,7 +4,7 @@
 //! singular tag is `<RELATION-GROUP>`; the plural list container in the schema
 //! is `<SPEC-RELATION-GROUPS>`. The public [`parse_relation_group`] entry
 //! scans for the first start event and defers to the `pub(crate)` inner
-//! routine [`parse_relation_group_inner`], which is the function the future
+//! routine `parse_relation_group_inner`, which is the function the future
 //! `<SPEC-RELATION-GROUPS>` list driver will call once it has discriminated
 //! `Start` vs `Empty` events.
 //!
@@ -19,7 +19,7 @@ use quick_xml::events::{BytesStart, Event};
 
 /// Standalone entry point — typically used by integration tests and list-driver
 /// code. Scans for the first `<RELATION-GROUP>` start event then defers to
-/// [`parse_relation_group_inner`].
+/// `parse_relation_group_inner`.
 pub fn parse_relation_group(xml: &str) -> Result<RelationGroup, ReqIfError> {
     let mut r = ReqIfReader::new(xml.as_bytes());
     loop {

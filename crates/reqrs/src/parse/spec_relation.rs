@@ -2,7 +2,7 @@
 //!
 //! Mirrors `strict-doc-reqif/reqif/parsers/spec_relation_parser.py`. The
 //! public [`parse_spec_relation`] entry scans for the first start event and
-//! defers to the `pub(crate)` inner routine [`parse_spec_relation_inner`],
+//! defers to the `pub(crate)` inner routine `parse_spec_relation_inner`,
 //! which is the function the future `<SPEC-RELATIONS>` list driver will call
 //! once it has discriminated `Start` vs `Empty` events.
 //!
@@ -18,7 +18,7 @@ use quick_xml::events::{BytesStart, Event};
 
 /// Standalone entry point — typically used by integration tests and list-driver
 /// code. Scans for the first `<SPEC-RELATION>` start event then defers to
-/// [`parse_spec_relation_inner`].
+/// `parse_spec_relation_inner`.
 pub fn parse_spec_relation(xml: &str) -> Result<SpecRelation, ReqIfError> {
     let mut r = ReqIfReader::new(xml.as_bytes());
     loop {

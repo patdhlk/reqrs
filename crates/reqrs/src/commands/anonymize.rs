@@ -22,10 +22,10 @@
 //! Anonymized fields:
 //! - Header: `title`, `comment`, `source_tool_id`, `req_if_tool_id`, and
 //!   the `Text` variant of `repository_id`.
-//! - [`DataTypeCommon`]: `description`, `long_name`.
+//! - [`crate::model::DataTypeCommon`]: `description`, `long_name`.
 //! - [`SpecObject`]: `description`, `long_name`, plus `String` and `Xhtml`
 //!   attribute values.
-//! - [`Specification`]: `description`, `long_name`, plus `String` and `Xhtml`
+//! - [`crate::model::Specification`]: `description`, `long_name`, plus `String` and `Xhtml`
 //!   attribute values inside `values`.
 //!
 //! For `Xhtml` attribute values, the original raw markup is replaced with

@@ -9,7 +9,7 @@
 //!
 //! `<SPEC-ATTRIBUTES>` is parsed by walking its children and dispatching every
 //! `<ATTRIBUTE-DEFINITION-*>` Start/Empty event to
-//! [`crate::parse::attribute_def::parse_attribute_definition_inner`]. The
+//! `parse_attribute_definition_inner`. The
 //! three-state `Option<Vec<AttributeDefinition>>` semantics mirror
 //! `DataTypeEnumeration::specified_values`: `None` for "no SPEC-ATTRIBUTES
 //! block", `Some(vec![])` for an empty `<SPEC-ATTRIBUTES/>`.
