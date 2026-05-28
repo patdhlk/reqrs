@@ -22,7 +22,7 @@ fn minimal_round_trip() {
     );
     assert!(bundle.header.is_none());
     assert!(bundle.core_content.is_none());
-    assert!(!bundle.tool_extensions_tag_exists);
+    assert!(!bundle.tool_extensions.is_present());
 
     let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
     assert_eq!(out, MINIMAL);
@@ -100,6 +100,76 @@ fn full_pipeline_round_trip_with_datatype_and_spec_type_and_spec_object() {
             .lookup
             .spec_objects
             .contains_key(&reqrs::SpecObjectId::new("SO-1"))
+    );
+
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}
+
+/// Non-empty `<TOOL-EXTENSIONS>` body must round-trip verbatim. Vendor tools
+/// (Polarion, Doors) emit opaque XML payloads here; we capture the inner
+/// bytes via `capture_inner_raw` and splice them back unchanged on unparse —
+/// the same pattern used for XHTML attribute values.
+#[test]
+fn tool_extensions_non_empty_content_round_trip() {
+    let src = r#"<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd">
+  <TOOL-EXTENSIONS>
+    <ReqIFToolExtension>
+      <tool-data>vendor-specific data</tool-data>
+    </ReqIFToolExtension>
+  </TOOL-EXTENSIONS>
+</REQ-IF>
+"#;
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+
+    // The model must classify this as Content(raw), not EmptyOpenClose.
+    match &bundle.tool_extensions {
+        reqrs::model::ToolExtensions::Content(raw) => {
+            // The captured inner bytes must include the child element and its
+            // text payload — the surrounding whitespace is also preserved
+            // verbatim, which is what makes the byte-equal round-trip work.
+            assert!(
+                raw.contains("<ReqIFToolExtension>"),
+                "captured raw should contain child element, got {raw:?}"
+            );
+            assert!(
+                raw.contains("vendor-specific data"),
+                "captured raw should contain text payload, got {raw:?}"
+            );
+        }
+        other => panic!("expected ToolExtensions::Content, got {other:?}"),
+    }
+
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}
+
+/// Self-closed `<TOOL-EXTENSIONS/>` must round-trip as self-closed.
+#[test]
+fn tool_extensions_self_closed_round_trip() {
+    let src = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<REQ-IF xmlns=\"http://www.omg.org/spec/ReqIF/20110401/reqif.xsd\">\n  <TOOL-EXTENSIONS/>\n</REQ-IF>\n";
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+    assert_eq!(
+        bundle.tool_extensions,
+        reqrs::model::ToolExtensions::SelfClosed
+    );
+
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}
+
+/// `<TOOL-EXTENSIONS>` empty open/close form must round-trip as open/close
+/// (NOT promoted to self-closed) — the Mode 3 invariant is preserved.
+#[test]
+fn tool_extensions_empty_open_close_round_trip() {
+    let src = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+<REQ-IF xmlns=\"http://www.omg.org/spec/ReqIF/20110401/reqif.xsd\">\n  <TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n</REQ-IF>\n";
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+    assert_eq!(
+        bundle.tool_extensions,
+        reqrs::model::ToolExtensions::EmptyOpenClose
     );
 
     let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();

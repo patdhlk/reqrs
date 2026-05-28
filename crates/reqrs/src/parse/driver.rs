@@ -11,13 +11,16 @@
 //! - dispatches each direct child of `<REQ-IF>` / `<CORE-CONTENT>` /
 //!   `<REQ-IF-CONTENT>` to the matching `pub(crate)` per-element inner parser,
 //! - builds an [`ObjectLookup`] from the assembled content,
-//! - records `TOOL-EXTENSIONS` presence as a boolean.
+//! - records `<TOOL-EXTENSIONS>` as a [`ToolExtensions`] value capturing
+//!   presence, form (self-closed vs empty open/close), and — when non-empty —
+//!   the verbatim inner XML bytes for byte-exact round-trip.
 //!
 //! Unknown elements are skipped with a [`SchemaWarning`] (Python behaviour).
 
 use crate::error::{ReqIfError, SchemaWarning};
 use crate::model::{
     CoreContent, NamespaceInfo, ObjectLookup, ReqIfBundle, ReqIfContent, ReqIfHeader,
+    ToolExtensions,
 };
 use crate::parse::data_type::parse_data_type_inner;
 use crate::parse::header::parse_header_from_reader;
@@ -49,8 +52,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
             namespace_info,
             header: None,
             core_content: None,
-            tool_extensions_tag_exists: false,
-            tool_extensions_empty_open_close: false,
+            tool_extensions: ToolExtensions::Absent,
             lookup: ObjectLookup::empty(),
             exceptions: Vec::new(),
         });
@@ -58,8 +60,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
 
     let mut header: Option<ReqIfHeader> = None;
     let mut core_content: Option<CoreContent> = None;
-    let mut tool_extensions_tag_exists = false;
-    let mut tool_extensions_empty_open_close = false;
+    let mut tool_extensions = ToolExtensions::Absent;
     let mut exceptions: Vec<SchemaWarning> = Vec::new();
 
     loop {
@@ -81,16 +82,30 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
                         core_content = Some(parse_core_content(&mut r, &owned, &mut exceptions)?);
                     }
                     b"TOOL-EXTENSIONS" => {
-                        tool_extensions_tag_exists = true;
                         let owned = s.into_owned();
-                        // Walk to the matching end, noting whether the body
-                        // contained any element child (Start or Empty). If it
-                        // did not, the source spelled the tag as
-                        // `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (empty
-                        // open/close form) and we must preserve that on
-                        // round-trip — `<TOOL-EXTENSIONS/>` is byte-distinct.
-                        tool_extensions_empty_open_close =
-                            scan_tool_extensions_empty(&mut r, &owned)?;
+                        // Capture the inner bytes verbatim. We must distinguish
+                        // three open/close cases for byte-exact round-trip:
+                        //
+                        //   `<TOOL-EXTENSIONS>...non-empty...</TOOL-EXTENSIONS>`
+                        //       → `Content(raw)` — preserve verbatim. Vendor
+                        //         payloads (Polarion, Doors, etc.) live here.
+                        //
+                        //   `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>`
+                        //       → `EmptyOpenClose` — whitespace-only body. The
+                        //         indentation/newlines themselves are vendor
+                        //         convention and our unparser regenerates a
+                        //         canonical form, so we don't preserve them
+                        //         byte-for-byte; we only honor the open/close
+                        //         vs self-close distinction.
+                        //
+                        //   (separately) `<TOOL-EXTENSIONS/>` → `SelfClosed`,
+                        //         handled in the `Event::Empty` arm below.
+                        let raw = r.capture_inner_raw(&owned)?;
+                        tool_extensions = if raw.trim().is_empty() {
+                            ToolExtensions::EmptyOpenClose
+                        } else {
+                            ToolExtensions::Content(raw)
+                        };
                     }
                     _ => {
                         exceptions.push(
@@ -109,7 +124,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
                 let name = s.name().as_ref().to_vec();
                 match name.as_slice() {
                     b"TOOL-EXTENSIONS" => {
-                        tool_extensions_tag_exists = true;
+                        tool_extensions = ToolExtensions::SelfClosed;
                     }
                     b"CORE-CONTENT" => {
                         core_content = Some(CoreContent {
@@ -158,8 +173,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
         namespace_info,
         header,
         core_content,
-        tool_extensions_tag_exists,
-        tool_extensions_empty_open_close,
+        tool_extensions,
         lookup,
         exceptions,
     })
@@ -561,56 +575,6 @@ fn parse_relation_groups(
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
                     msg: "EOF inside <SPEC-RELATION-GROUPS>".into(),
-                });
-            }
-            _ => continue,
-        }
-    }
-}
-
-/// Consume the body of a `<TOOL-EXTENSIONS>` block (caller has just read the
-/// Start event) up to and including the matching `</TOOL-EXTENSIONS>`.
-/// Returns `true` iff the body contained no element children — i.e. the
-/// source was `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (empty open/close
-/// form), not `<TOOL-EXTENSIONS><child/>...</TOOL-EXTENSIONS>`.
-///
-/// We treat both `Event::Start` and `Event::Empty` as "had a child"; pure
-/// `Text` (whitespace, comments) does NOT count as content because the
-/// unparser's placeholder body is also pure whitespace, so any content here
-/// has already been lost to the model and we can only honor the empty/non-empty
-/// distinction.
-fn scan_tool_extensions_empty(
-    r: &mut ReqIfReader<'_>,
-    start: &BytesStart<'_>,
-) -> Result<bool, ReqIfError> {
-    let name = start.name().as_ref().to_vec();
-    let mut had_child = false;
-    let mut depth = 1usize;
-    loop {
-        match r.read_event()? {
-            Event::Start(s) => {
-                if depth == 1 {
-                    had_child = true;
-                }
-                if s.name().as_ref() == name.as_slice() {
-                    depth += 1;
-                }
-            }
-            Event::Empty(_) => {
-                if depth == 1 {
-                    had_child = true;
-                }
-            }
-            Event::End(e) if e.name().as_ref() == name.as_slice() => {
-                depth -= 1;
-                if depth == 0 {
-                    return Ok(!had_child);
-                }
-            }
-            Event::Eof => {
-                return Err(ReqIfError::Xml {
-                    pos: r.buffer_position(),
-                    msg: "EOF inside <TOOL-EXTENSIONS>".into(),
                 });
             }
             _ => continue,

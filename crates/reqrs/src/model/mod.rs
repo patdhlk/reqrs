@@ -24,7 +24,7 @@ pub use attribute_value::{
     AttributeValue, AttributeValueBoolean, AttributeValueDate, AttributeValueEnumeration,
     AttributeValueInteger, AttributeValueReal, AttributeValueString, AttributeValueXhtml,
 };
-pub use bundle::ReqIfBundle;
+pub use bundle::{ReqIfBundle, ToolExtensions};
 pub use content::{ListForms, ReqIfContent};
 pub use core_content::CoreContent;
 pub use data_type::{

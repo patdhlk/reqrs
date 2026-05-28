@@ -6,15 +6,12 @@
 //! - [`NamespaceInfo`] — the XML prologue + root element attributes.
 //! - [`ReqIfHeader`] — the `<THE-HEADER>` block.
 //! - [`CoreContent`] — the `<CORE-CONTENT>/<REQ-IF-CONTENT>` body.
-//! - `tool_extensions_tag_exists` — whether the source had a
-//!   `<TOOL-EXTENSIONS>` element. We don't yet model the contents of tool
-//!   extensions (vendor-specific opaque XML); this boolean simply records
-//!   that the tag was present so the unparser can re-emit a placeholder.
-//! - `tool_extensions_empty_open_close` — companion of
-//!   `tool_extensions_tag_exists`. True iff the source spelled the (empty)
-//!   tag as `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (open/close form);
-//!   false means `<TOOL-EXTENSIONS/>` (self-closed) or the bundle is
-//!   synthetic. Only consulted when `tool_extensions_tag_exists` is true.
+//! - `tool_extensions` — a [`ToolExtensions`] value capturing whether the
+//!   source had a `<TOOL-EXTENSIONS>` element, which form it took
+//!   (self-closed vs empty open/close), and — when non-empty — the verbatim
+//!   inner XML bytes. The verbatim string is preserved byte-for-byte (same
+//!   pattern used for XHTML attribute values) so vendor-specific
+//!   tool-extension payloads round-trip without loss.
 //! - [`ObjectLookup`] — pre-built indexes for reference resolution.
 //! - `exceptions` — non-fatal [`SchemaWarning`]s accumulated during parse.
 //!
@@ -32,16 +29,47 @@ use crate::model::{
     SpecObjectType, SpecType, Specification,
 };
 
+/// Source-form-preserving representation of the optional `<TOOL-EXTENSIONS>`
+/// element under `<REQ-IF>`.
+///
+/// We do not yet model the rich vendor-specific schema that can appear inside
+/// the element — but we DO preserve enough of the source to round-trip
+/// byte-exact:
+///
+/// - [`ToolExtensions::Absent`] — the source had no `<TOOL-EXTENSIONS>` at all.
+/// - [`ToolExtensions::SelfClosed`] — the source spelled it `<TOOL-EXTENSIONS/>`.
+/// - [`ToolExtensions::EmptyOpenClose`] — the source spelled it
+///   `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` (open/close pair with
+///   whitespace-only body).
+/// - [`ToolExtensions::Content(raw)`] — the source had non-whitespace content
+///   between the open and close tags. `raw` holds the inner bytes verbatim
+///   (leading/trailing whitespace included) so the unparser can splice them
+///   back unchanged. This mirrors the [`crate::parse::reader::ReqIfReader::capture_inner_raw`]
+///   pattern used for XHTML attribute values.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ToolExtensions {
+    #[default]
+    Absent,
+    SelfClosed,
+    EmptyOpenClose,
+    Content(String),
+}
+
+impl ToolExtensions {
+    /// True iff the source had a `<TOOL-EXTENSIONS>` element in any form.
+    /// Convenience accessor that mirrors the old `tool_extensions_tag_exists`
+    /// boolean for call sites that only care about presence.
+    pub fn is_present(&self) -> bool {
+        !matches!(self, ToolExtensions::Absent)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ReqIfBundle {
     pub namespace_info: NamespaceInfo,
     pub header: Option<ReqIfHeader>,
     pub core_content: Option<CoreContent>,
-    pub tool_extensions_tag_exists: bool,
-    /// True iff the source had the empty open/close form
-    /// `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n`. Ignored when
-    /// `tool_extensions_tag_exists` is false.
-    pub tool_extensions_empty_open_close: bool,
+    pub tool_extensions: ToolExtensions,
     pub lookup: ObjectLookup,
     pub exceptions: Vec<SchemaWarning>,
 }
@@ -62,8 +90,7 @@ impl ReqIfBundle {
             },
             header: None,
             core_content: None,
-            tool_extensions_tag_exists: false,
-            tool_extensions_empty_open_close: false,
+            tool_extensions: ToolExtensions::default(),
             lookup: ObjectLookup::empty(),
             exceptions: Vec::new(),
         }
@@ -141,8 +168,7 @@ mod tests {
             namespace_info: NamespaceInfo::default(),
             header: None,
             core_content: None,
-            tool_extensions_tag_exists: false,
-            tool_extensions_empty_open_close: false,
+            tool_extensions: ToolExtensions::default(),
             lookup,
             exceptions: Vec::new(),
         }

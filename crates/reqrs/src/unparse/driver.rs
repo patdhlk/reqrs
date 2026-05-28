@@ -7,9 +7,8 @@
 //!   [`NamespaceInfo::doctype_is_present`]),
 //! - reconstructs the `<REQ-IF ...>` opener with attributes in canonical order,
 //! - delegates each per-element block to the appropriate `unparse_*` helper,
-//! - re-emits a `<TOOL-EXTENSIONS>` placeholder when the parsed source had
-//!   one, choosing self-closed vs open/close per
-//!   `tool_extensions_empty_open_close`.
+//! - re-emits the `<TOOL-EXTENSIONS>` block when present, dispatching on
+//!   [`ToolExtensions`]: self-closed, empty open/close, or verbatim content.
 //!
 //! Attribute order on the root opener: `xmlns`, `xmlns:xsi`,
 //! `xmlns:configuration`, `xmlns:id`, `xmlns:xhtml`, `xsi:schemaLocation`,
@@ -18,7 +17,7 @@
 //! Doors, Eclipse RMF).
 
 use crate::error::ReqIfError;
-use crate::model::{NamespaceInfo, ReqIfBundle};
+use crate::model::{NamespaceInfo, ReqIfBundle, ToolExtensions};
 use crate::unparse::data_type::unparse_data_type;
 use crate::unparse::header::unparse_header;
 use crate::unparse::relation_group::unparse_relation_group;
@@ -151,19 +150,20 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
         out.push_str("  </CORE-CONTENT>\n");
     }
 
-    if bundle.tool_extensions_tag_exists {
-        // Honor the source form per `tool_extensions_empty_open_close`. For
-        // synthetic bundles (default `false`) we keep the legacy self-closed
-        // form; for parsed bundles whose source used
-        // `<TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n` we reproduce it
-        // byte-exact. Note: we have no model for the body contents, so an
-        // open/close form with actual child elements would still round-trip
-        // to an empty open/close body — fine for the corpus, where every
-        // observed TOOL-EXTENSIONS body is empty.
-        if bundle.tool_extensions_empty_open_close {
+    // Dispatch the `<TOOL-EXTENSIONS>` block per its [`ToolExtensions`]
+    // variant. The `Content` arm splices the captured raw bytes between the
+    // open and close tags verbatim — no escaping, no indentation
+    // normalization — so non-whitespace vendor payloads round-trip byte-exact.
+    match &bundle.tool_extensions {
+        ToolExtensions::Absent => {}
+        ToolExtensions::SelfClosed => out.push_str("  <TOOL-EXTENSIONS/>\n"),
+        ToolExtensions::EmptyOpenClose => {
             out.push_str("  <TOOL-EXTENSIONS>\n  </TOOL-EXTENSIONS>\n");
-        } else {
-            out.push_str("  <TOOL-EXTENSIONS/>\n");
+        }
+        ToolExtensions::Content(raw) => {
+            out.push_str("  <TOOL-EXTENSIONS>");
+            out.push_str(raw);
+            out.push_str("</TOOL-EXTENSIONS>\n");
         }
     }
 
@@ -176,7 +176,7 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, _mode: FormatMode) -> Result<String,
 /// signal — if the bundle has no header, no core_content, and no
 /// tool_extensions tag, we emit `<REQ-IF .../>` instead of an open/close pair.
 fn is_self_closed_root(bundle: &ReqIfBundle) -> bool {
-    bundle.header.is_none() && bundle.core_content.is_none() && !bundle.tool_extensions_tag_exists
+    bundle.header.is_none() && bundle.core_content.is_none() && !bundle.tool_extensions.is_present()
 }
 
 /// Reconstruct the `<REQ-IF>` opener.
