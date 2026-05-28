@@ -13,4 +13,5 @@ pub use ids::{
     AttributeDefId, DataTypeId, EnumValueId, RelationGroupId, SpecObjectId, SpecRelationId,
     SpecTypeId, SpecificationId,
 };
-pub use unparse::FormatMode;
+pub use parse::ReqIfParser;
+pub use unparse::{FormatMode, ReqIfUnparser};
