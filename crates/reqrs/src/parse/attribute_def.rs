@@ -78,9 +78,17 @@ pub(crate) fn parse_attribute_definition_inner(
     };
 
     // Walk children in source order so we can preserve <TYPE> vs <DEFAULT-VALUE> ordering.
+    // Variant of `<DEFAULT-VALUE>` (self-closed vs open with raw payload) is captured first;
+    // the corresponding `ChildOrder` is decided from `seen_type_first` at the moment the
+    // `<DEFAULT-VALUE>` event is observed and folded into the presence variant.
+    enum RawPresence {
+        Absent,
+        SelfClosed,
+        Open(String),
+    }
     let mut type_ref: Option<String> = None;
-    let mut default_value = DefaultValuePresence::Absent;
-    let mut child_order = ChildOrder::TypeThenDefault;
+    let mut raw_presence = RawPresence::Absent;
+    let mut default_order: Option<ChildOrder> = None;
     let mut seen_type_first: Option<bool> = None;
 
     loop {
@@ -100,19 +108,21 @@ pub(crate) fn parse_attribute_definition_inner(
                 });
             }
             Event::Start(s) if s.name().as_ref() == b"DEFAULT-VALUE" => {
-                let _ = s;
+                let owned = s.into_owned();
                 if seen_type_first.is_none() {
                     seen_type_first = Some(false);
                 }
-                let raw = r.capture_inner_raw(b"DEFAULT-VALUE")?;
-                default_value = DefaultValuePresence::Open(DefaultValueRaw(raw));
+                default_order = Some(child_order_from(seen_type_first));
+                let raw = r.capture_inner_raw(&owned)?;
+                raw_presence = RawPresence::Open(raw);
             }
             Event::Empty(s) if s.name().as_ref() == b"DEFAULT-VALUE" => {
                 let _ = s;
                 if seen_type_first.is_none() {
                     seen_type_first = Some(false);
                 }
-                default_value = DefaultValuePresence::SelfClosed;
+                default_order = Some(child_order_from(seen_type_first));
+                raw_presence = RawPresence::SelfClosed;
             }
             Event::End(e) if e.name().as_ref() == tag => break,
             Event::Eof => {
@@ -125,9 +135,16 @@ pub(crate) fn parse_attribute_definition_inner(
         }
     }
 
-    if matches!(seen_type_first, Some(false)) {
-        child_order = ChildOrder::DefaultThenType;
-    }
+    let default_value = match raw_presence {
+        RawPresence::Absent => DefaultValuePresence::Absent,
+        RawPresence::SelfClosed => DefaultValuePresence::SelfClosed(
+            default_order.expect("order must be set when default-value was observed"),
+        ),
+        RawPresence::Open(raw) => DefaultValuePresence::Open(
+            DefaultValueRaw(raw),
+            default_order.expect("order must be set when default-value was observed"),
+        ),
+    };
 
     let type_ref = DataTypeId(type_ref.ok_or(ReqIfError::MissingChild {
         child: "TYPE".into(),
@@ -140,9 +157,17 @@ pub(crate) fn parse_attribute_definition_inner(
         common,
         type_ref,
         default_value,
-        child_order,
         multi_valued,
     ))
+}
+
+/// Translate the `seen_type_first` tristate into a `ChildOrder` at the moment a
+/// `<DEFAULT-VALUE>` child is observed.
+fn child_order_from(seen_type_first: Option<bool>) -> ChildOrder {
+    match seen_type_first {
+        Some(true) => ChildOrder::TypeFirst,
+        Some(false) | None => ChildOrder::DefaultFirst,
+    }
 }
 
 /// Walk the body of a `<TYPE>` element and return the text content of its
@@ -210,14 +235,12 @@ fn variant_for_tag(tag: &[u8]) -> Result<(Variant, &'static [u8]), ReqIfError> {
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn build_variant(
     variant: Variant,
     identifier: AttributeDefId,
     common: AttributeDefCommon,
     type_ref: DataTypeId,
     default_value: DefaultValuePresence,
-    child_order: ChildOrder,
     multi_valued: Option<bool>,
 ) -> AttributeDefinition {
     match variant {
@@ -226,49 +249,42 @@ fn build_variant(
             common,
             type_ref,
             default_value,
-            child_order,
         }),
         Variant::Boolean => AttributeDefinition::Boolean(AttributeDefinitionBoolean {
             identifier,
             common,
             type_ref,
             default_value,
-            child_order,
         }),
         Variant::Integer => AttributeDefinition::Integer(AttributeDefinitionInteger {
             identifier,
             common,
             type_ref,
             default_value,
-            child_order,
         }),
         Variant::Real => AttributeDefinition::Real(AttributeDefinitionReal {
             identifier,
             common,
             type_ref,
             default_value,
-            child_order,
         }),
         Variant::Date => AttributeDefinition::Date(AttributeDefinitionDate {
             identifier,
             common,
             type_ref,
             default_value,
-            child_order,
         }),
         Variant::Xhtml => AttributeDefinition::Xhtml(AttributeDefinitionXhtml {
             identifier,
             common,
             type_ref,
             default_value,
-            child_order,
         }),
         Variant::Enumeration => AttributeDefinition::Enumeration(AttributeDefinitionEnumeration {
             identifier,
             common,
             type_ref,
             default_value,
-            child_order,
             multi_valued,
         }),
     }

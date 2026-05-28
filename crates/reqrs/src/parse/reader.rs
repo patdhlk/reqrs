@@ -71,16 +71,29 @@ impl<'a> ReqIfReader<'a> {
         }
     }
 
-    /// Capture every byte between the current cursor and the matching `</end_name>` close
-    /// (exclusive of the close tag itself) as a verbatim UTF-8 string.
+    /// Capture every byte between the cursor (just after a `<TAG>` Start event)
+    /// and the matching `</TAG>` (exclusive), as UTF-8.
     ///
-    /// Precondition: the matching `<end_name>` start event has already been consumed by
-    /// the caller, so the reader is positioned just inside the element. Nested elements
-    /// of the same name are tracked by depth so the helper terminates at the correct
-    /// close. The captured bytes are returned with original whitespace, escaping, and
-    /// child markup preserved — this is what makes round-tripping XHTML and `DEFAULT-VALUE`
-    /// blocks byte-exact.
-    pub fn capture_inner_raw(&mut self, end_name: &[u8]) -> Result<String, ReqIfError> {
+    /// **Precondition:** The caller MUST have just consumed `Event::Start(_)` for
+    /// `start`. Calling this after `Event::Empty(_)` is a logic error — the helper
+    /// would walk forward through unrelated content trying to find a non-existent
+    /// close tag. Self-closed elements have no inner content; there is nothing to
+    /// capture.
+    ///
+    /// quick-xml does not expose any signal on `BytesStart` that distinguishes a
+    /// `Start` from an `Empty` origin, so the precondition is documented rather
+    /// than asserted. Threading the original `BytesStart` through the call (vs.
+    /// passing a raw close-tag name) makes misuse far harder: the caller must
+    /// already hold the event, which is only emitted on `Start` / `Empty`, and
+    /// the type makes the close-tag name derivation an implementation detail.
+    ///
+    /// Nested elements of the same name are tracked by depth so the helper
+    /// terminates at the correct close. The captured bytes are returned with
+    /// original whitespace, escaping, and child markup preserved — this is what
+    /// makes round-tripping XHTML and `DEFAULT-VALUE` blocks byte-exact.
+    pub fn capture_inner_raw(&mut self, start: &BytesStart<'_>) -> Result<String, ReqIfError> {
+        let end_name = start.name();
+        let end_bytes = end_name.as_ref();
         let begin = self.inner.buffer_position() as usize;
         let mut depth = 1usize;
         loop {
@@ -93,8 +106,8 @@ impl<'a> ReqIfReader<'a> {
                     pos: self.inner.buffer_position() as usize,
                     msg: e.to_string(),
                 })? {
-                Event::Start(s) if s.name().as_ref() == end_name => depth += 1,
-                Event::End(e) if e.name().as_ref() == end_name => {
+                Event::Start(s) if s.name().as_ref() == end_bytes => depth += 1,
+                Event::End(e) if e.name().as_ref() == end_bytes => {
                     depth -= 1;
                     if depth == 0 {
                         // pos_before sits at "<" of the closing tag — quick-xml's offset
@@ -110,7 +123,7 @@ impl<'a> ReqIfReader<'a> {
                         pos: self.inner.buffer_position() as usize,
                         msg: format!(
                             "EOF capturing inside <{}>",
-                            String::from_utf8_lossy(end_name)
+                            String::from_utf8_lossy(end_bytes)
                         ),
                     });
                 }
@@ -244,17 +257,14 @@ mod tests {
     fn capture_inner_raw_preserves_bytes_inside_element() {
         let xml = b"<OUTER><THE-VALUE>hello <b>world</b></THE-VALUE></OUTER>";
         let mut r = ReqIfReader::new(xml);
-        loop {
+        let start = loop {
             match r.read_event().unwrap() {
-                Event::Start(s) if s.name().as_ref() == b"THE-VALUE" => break,
+                Event::Start(s) if s.name().as_ref() == b"THE-VALUE" => break s.into_owned(),
                 Event::Eof => panic!("no THE-VALUE start"),
                 _ => continue,
             }
-        }
-        assert_eq!(
-            r.capture_inner_raw(b"THE-VALUE").unwrap(),
-            "hello <b>world</b>"
-        );
+        };
+        assert_eq!(r.capture_inner_raw(&start).unwrap(), "hello <b>world</b>");
     }
 
     #[test]
@@ -263,15 +273,15 @@ mod tests {
         // child element on its own indented line, with trailing whitespace before close.
         let xml = b"<OUTER>\n              <DEFAULT-VALUE>\n                <ATTRIBUTE-VALUE-STRING THE-VALUE=\"TBD\"/>\n              </DEFAULT-VALUE>\n            </OUTER>";
         let mut r = ReqIfReader::new(xml);
-        loop {
+        let start = loop {
             match r.read_event().unwrap() {
-                Event::Start(s) if s.name().as_ref() == b"DEFAULT-VALUE" => break,
+                Event::Start(s) if s.name().as_ref() == b"DEFAULT-VALUE" => break s.into_owned(),
                 Event::Eof => panic!("no DEFAULT-VALUE start"),
                 _ => continue,
             }
-        }
+        };
         assert_eq!(
-            r.capture_inner_raw(b"DEFAULT-VALUE").unwrap(),
+            r.capture_inner_raw(&start).unwrap(),
             "\n                <ATTRIBUTE-VALUE-STRING THE-VALUE=\"TBD\"/>\n              "
         );
     }
@@ -283,11 +293,11 @@ mod tests {
         let xml = b"<W><W>inner</W></W>";
         let mut r = ReqIfReader::new(xml);
         // Consume outer <W>.
-        match r.read_event().unwrap() {
-            Event::Start(s) if s.name().as_ref() == b"W" => {}
+        let start = match r.read_event().unwrap() {
+            Event::Start(s) if s.name().as_ref() == b"W" => s.into_owned(),
             _ => unreachable!(),
-        }
-        assert_eq!(r.capture_inner_raw(b"W").unwrap(), "<W>inner</W>");
+        };
+        assert_eq!(r.capture_inner_raw(&start).unwrap(), "<W>inner</W>");
     }
 
     #[test]

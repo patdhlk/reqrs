@@ -23,7 +23,6 @@ pub fn unparse_attribute_definition(ad: &AttributeDefinition) -> String {
             &a.common,
             a.type_ref.as_str(),
             &a.default_value,
-            a.child_order,
             None,
         ),
         AttributeDefinition::Boolean(a) => unparse_one(
@@ -33,7 +32,6 @@ pub fn unparse_attribute_definition(ad: &AttributeDefinition) -> String {
             &a.common,
             a.type_ref.as_str(),
             &a.default_value,
-            a.child_order,
             None,
         ),
         AttributeDefinition::Integer(a) => unparse_one(
@@ -43,7 +41,6 @@ pub fn unparse_attribute_definition(ad: &AttributeDefinition) -> String {
             &a.common,
             a.type_ref.as_str(),
             &a.default_value,
-            a.child_order,
             None,
         ),
         AttributeDefinition::Real(a) => unparse_one(
@@ -53,7 +50,6 @@ pub fn unparse_attribute_definition(ad: &AttributeDefinition) -> String {
             &a.common,
             a.type_ref.as_str(),
             &a.default_value,
-            a.child_order,
             None,
         ),
         AttributeDefinition::Date(a) => unparse_one(
@@ -63,7 +59,6 @@ pub fn unparse_attribute_definition(ad: &AttributeDefinition) -> String {
             &a.common,
             a.type_ref.as_str(),
             &a.default_value,
-            a.child_order,
             None,
         ),
         AttributeDefinition::Xhtml(a) => unparse_one(
@@ -73,7 +68,6 @@ pub fn unparse_attribute_definition(ad: &AttributeDefinition) -> String {
             &a.common,
             a.type_ref.as_str(),
             &a.default_value,
-            a.child_order,
             None,
         ),
         AttributeDefinition::Enumeration(a) => unparse_one(
@@ -83,13 +77,11 @@ pub fn unparse_attribute_definition(ad: &AttributeDefinition) -> String {
             &a.common,
             a.type_ref.as_str(),
             &a.default_value,
-            a.child_order,
             a.multi_valued,
         ),
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn unparse_one(
     tag: &str,
     ref_tag: &str,
@@ -97,7 +89,6 @@ fn unparse_one(
     common: &AttributeDefCommon,
     type_ref: &str,
     default_value: &DefaultValuePresence,
-    child_order: ChildOrder,
     multi_valued: Option<bool>,
 ) -> String {
     let mut out = String::new();
@@ -133,27 +124,37 @@ fn unparse_one(
         out.push_str("</TYPE>\n");
     };
 
-    let emit_default = |out: &mut String| match default_value {
-        DefaultValuePresence::Absent => {}
-        DefaultValuePresence::SelfClosed => {
-            out.push_str(DEFAULT_INDENT);
-            out.push_str("<DEFAULT-VALUE/>\n");
-        }
-        DefaultValuePresence::Open(raw) => {
-            out.push_str(DEFAULT_INDENT);
-            out.push_str("<DEFAULT-VALUE>");
-            out.push_str(&raw.0);
-            out.push_str("</DEFAULT-VALUE>\n");
-        }
+    let emit_self_closed_default = |out: &mut String| {
+        out.push_str(DEFAULT_INDENT);
+        out.push_str("<DEFAULT-VALUE/>\n");
+    };
+    let emit_open_default = |out: &mut String, raw: &DefaultValueRaw| {
+        out.push_str(DEFAULT_INDENT);
+        out.push_str("<DEFAULT-VALUE>");
+        out.push_str(&raw.0);
+        out.push_str("</DEFAULT-VALUE>\n");
     };
 
-    match child_order {
-        ChildOrder::TypeThenDefault => {
+    // The child-order lives inside the presence variant — `Absent` cannot
+    // carry an order, so it falls through to the type-only branch.
+    match default_value {
+        DefaultValuePresence::Absent => {
             emit_type(&mut out);
-            emit_default(&mut out);
         }
-        ChildOrder::DefaultThenType => {
-            emit_default(&mut out);
+        DefaultValuePresence::SelfClosed(ChildOrder::TypeFirst) => {
+            emit_type(&mut out);
+            emit_self_closed_default(&mut out);
+        }
+        DefaultValuePresence::SelfClosed(ChildOrder::DefaultFirst) => {
+            emit_self_closed_default(&mut out);
+            emit_type(&mut out);
+        }
+        DefaultValuePresence::Open(raw, ChildOrder::TypeFirst) => {
+            emit_type(&mut out);
+            emit_open_default(&mut out, raw);
+        }
+        DefaultValuePresence::Open(raw, ChildOrder::DefaultFirst) => {
+            emit_open_default(&mut out, raw);
             emit_type(&mut out);
         }
     }

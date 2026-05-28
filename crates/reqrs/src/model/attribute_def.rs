@@ -79,31 +79,41 @@ pub struct AttributeDefCommon {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefaultValueRaw(pub String);
 
-/// Tracks whether `<DEFAULT-VALUE>` was self-closed in the source XML
-/// (`<DEFAULT-VALUE/>`) versus an open/close pair with possibly-empty body.
-/// Carried on the variant structs alongside the raw payload so the unparser
-/// can pick the right form without inspecting the contents.
+/// Order of `<TYPE>` and `<DEFAULT-VALUE>` children as they appeared in the
+/// source XML. Real-world fixtures show both orderings (DEFAULT-VALUE before
+/// TYPE in some, after in others) so round-trip requires preserving it.
+///
+/// Carried inside [`DefaultValuePresence`] so the order is only addressable
+/// when a `<DEFAULT-VALUE>` child actually exists — `Absent` cannot pair with
+/// an order, which removes the previously-meaningless `(Absent, _)` state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ChildOrder {
+    /// `<TYPE>` preceded `<DEFAULT-VALUE>` in the source.
+    #[default]
+    TypeFirst,
+    /// `<DEFAULT-VALUE>` preceded `<TYPE>` in the source.
+    DefaultFirst,
+}
+
+/// Whether `<DEFAULT-VALUE>` appeared in the source and, when it did, in which
+/// position relative to `<TYPE>`. Self-closing vs open form is also tracked so
+/// the unparser can re-emit the exact original shape.
+///
+/// The position is carried per-variant — `Absent` deliberately has no
+/// `ChildOrder` field because position is meaningless when the child does not
+/// exist. This makes the previously-possible `(Absent, _)` state
+/// unrepresentable.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum DefaultValuePresence {
     /// No `<DEFAULT-VALUE>` child in the source.
     #[default]
     Absent,
-    /// Source had `<DEFAULT-VALUE/>` — emit self-closed.
-    SelfClosed,
-    /// Source had `<DEFAULT-VALUE>...</DEFAULT-VALUE>` — carry inner verbatim.
-    Open(DefaultValueRaw),
-}
-
-/// Order of `<TYPE>` and `<DEFAULT-VALUE>` children as they appeared in the
-/// source XML. Real-world fixtures show both orderings (DEFAULT-VALUE before
-/// TYPE in some, after in others) so round-trip requires preserving it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ChildOrder {
-    /// `<TYPE>` then `<DEFAULT-VALUE>` (or only `<TYPE>` — the canonical case).
-    #[default]
-    TypeThenDefault,
-    /// `<DEFAULT-VALUE>` then `<TYPE>`.
-    DefaultThenType,
+    /// Source had `<DEFAULT-VALUE/>` at the given position relative to `<TYPE>` —
+    /// emit self-closed in that position.
+    SelfClosed(ChildOrder),
+    /// Source had `<DEFAULT-VALUE>...</DEFAULT-VALUE>` at the given position —
+    /// carry inner verbatim and emit open/close at that position.
+    Open(DefaultValueRaw, ChildOrder),
 }
 
 macro_rules! ad_struct {
@@ -114,7 +124,6 @@ macro_rules! ad_struct {
             pub common: AttributeDefCommon,
             pub type_ref: DataTypeId,
             pub default_value: DefaultValuePresence,
-            pub child_order: ChildOrder,
             $(pub $field: $ty,)*
         }
     };
@@ -151,7 +160,6 @@ mod tests {
             common: common(),
             type_ref: DataTypeId::new("DT-1"),
             default_value: DefaultValuePresence::Absent,
-            child_order: ChildOrder::TypeThenDefault,
         });
         assert_eq!(s.identifier().as_str(), "AD-S");
         assert_eq!(s.type_ref().as_str(), "DT-1");
@@ -164,7 +172,6 @@ mod tests {
             common: common(),
             type_ref: DataTypeId::new("DT-E"),
             default_value: DefaultValuePresence::Absent,
-            child_order: ChildOrder::TypeThenDefault,
             multi_valued: Some(true),
         };
         assert_eq!(e.multi_valued, Some(true));

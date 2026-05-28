@@ -77,6 +77,22 @@ fn string_attribute_definition_with_self_closed_default_value() {
 }
 
 #[test]
+fn string_attribute_definition_with_self_closed_default_value_before_type() {
+    // Exercises the `SelfClosed(DefaultFirst)` shape — the self-closed
+    // `<DEFAULT-VALUE/>` appears before `<TYPE>`. The folded
+    // `DefaultValuePresence` carries the order with the presence variant,
+    // so this case is now a single irrefutable construction in the model.
+    let xml = r#"            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="AD-2">
+              <DEFAULT-VALUE/>
+              <TYPE>
+                <DATATYPE-DEFINITION-STRING-REF>DT-STR</DATATYPE-DEFINITION-STRING-REF>
+              </TYPE>
+            </ATTRIBUTE-DEFINITION-STRING>
+"#;
+    round_trip(xml);
+}
+
+#[test]
 fn string_attribute_definition_with_verbatim_default_value() {
     // <DEFAULT-VALUE> with non-trivial inner content. The inner bytes
     // (including the leading newline + indentation and the trailing
