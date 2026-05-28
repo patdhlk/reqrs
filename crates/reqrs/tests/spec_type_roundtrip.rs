@@ -6,6 +6,8 @@
 //! the integration corpus.
 
 use pretty_assertions::assert_eq;
+use reqrs::SpecTypeId;
+use reqrs::model::{SpecObjectType, SpecType, SpecTypeCommon};
 use reqrs::parse::spec_type::parse_spec_type;
 use reqrs::unparse::spec_type::unparse_spec_type;
 
@@ -75,4 +77,26 @@ fn relation_group_type_with_desc_and_last_change() {
     // present: DESC < IDENTIFIER < LAST-CHANGE < LONG-NAME.
     let xml = "        <RELATION-GROUP-TYPE DESC=\"Cluster of related artefacts\" IDENTIFIER=\"RGT-2\" LAST-CHANGE=\"2024-05-01T12:00:00+00:00\" LONG-NAME=\"Cluster\"/>\n";
     round_trip(xml);
+}
+
+#[test]
+fn spec_type_with_comments_before_emits_above_element() {
+    // A SpecType value with a non-empty `comments_before` must emit those
+    // comment lines at the 8-space SPEC-TYPE indent immediately above the
+    // outer tag. Mirrors the Polarion fixture's
+    // `<!-- "Heading" spec type definition -->` line.
+    let st = SpecType::SpecObject(SpecObjectType {
+        common: SpecTypeCommon {
+            identifier: SpecTypeId::new("ST-1"),
+            description: None,
+            last_change: None,
+            long_name: Some("Heading".into()),
+            was_self_closing: true,
+            spec_attributes: None,
+            comments_before: vec![" Heading spec type ".into()],
+        },
+    });
+    let out = unparse_spec_type(&st);
+    let expected = "        <!-- Heading spec type -->\n        <SPEC-OBJECT-TYPE IDENTIFIER=\"ST-1\" LONG-NAME=\"Heading\"/>\n";
+    assert_eq!(out, expected);
 }

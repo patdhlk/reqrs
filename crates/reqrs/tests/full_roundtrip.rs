@@ -160,6 +160,126 @@ fn tool_extensions_self_closed_round_trip() {
     assert_eq!(out, src);
 }
 
+/// Inline `<!-- ... -->` comments between siblings in `<SPEC-TYPES>`,
+/// `<SPEC-OBJECTS>`, and `<VALUES>` round-trip byte-exact. This is the
+/// end-to-end exercise of the same three positions the Polarion fixture uses
+/// in `tests/corpus/examples/04_convert_reqif_to_json/sample_polarion_reqifz.reqifz`:
+///
+/// - between sibling spec-type elements (here: between two SPEC-OBJECT-TYPEs)
+/// - before the first sibling inside `<SPEC-OBJECTS>`
+/// - between sibling `<ATTRIBUTE-VALUE-*>` elements inside `<VALUES>`
+///
+/// Each comment is captured on the *next* element's `comments_before` field
+/// and re-emitted above it at the element's own indent (8 / 8 / 12 spaces).
+#[test]
+fn inline_xml_comments_round_trip_between_siblings() {
+    let src = r#"<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd">
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <DATATYPES>
+        <DATATYPE-DEFINITION-STRING IDENTIFIER="DT-1" LONG-NAME="text" MAX-LENGTH="255"/>
+      </DATATYPES>
+      <SPEC-TYPES>
+        <SPEC-OBJECT-TYPE IDENTIFIER="SOT-1" LONG-NAME="One"/>
+        <!-- second spec type follows -->
+        <SPEC-OBJECT-TYPE IDENTIFIER="SOT-2" LONG-NAME="Two"/>
+      </SPEC-TYPES>
+      <SPEC-OBJECTS>
+        <!-- first object -->
+        <SPEC-OBJECT IDENTIFIER="SO-1">
+          <TYPE>
+            <SPEC-OBJECT-TYPE-REF>SOT-1</SPEC-OBJECT-TYPE-REF>
+          </TYPE>
+          <VALUES>
+            <!-- chapter name follows -->
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Section">
+              <DEFINITION>
+                <ATTRIBUTE-DEFINITION-STRING-REF>AD-1</ATTRIBUTE-DEFINITION-STRING-REF>
+              </DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <!-- body text follows -->
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Body">
+              <DEFINITION>
+                <ATTRIBUTE-DEFINITION-STRING-REF>AD-2</ATTRIBUTE-DEFINITION-STRING-REF>
+              </DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+        </SPEC-OBJECT>
+      </SPEC-OBJECTS>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>
+"#;
+
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+
+    // Sanity: each captured comment landed on the correct element.
+    let content = bundle
+        .core_content
+        .as_ref()
+        .and_then(|cc| cc.req_if_content.as_ref())
+        .expect("REQ-IF-CONTENT must be present");
+
+    let spec_types = content.spec_types.as_ref().unwrap();
+    assert_eq!(spec_types.len(), 2);
+    // The second SPEC-OBJECT-TYPE owns the inter-sibling comment; the first owns none.
+    use reqrs::model::SpecType;
+    let common_of = |st: &SpecType| match st {
+        SpecType::SpecObject(t) => t.common.clone(),
+        _ => panic!("expected SpecObject variant"),
+    };
+    assert!(common_of(&spec_types[0]).comments_before.is_empty());
+    assert_eq!(
+        common_of(&spec_types[1]).comments_before,
+        vec![" second spec type follows ".to_string()]
+    );
+
+    let spec_objects = content.spec_objects.as_ref().unwrap();
+    assert_eq!(spec_objects.len(), 1);
+    assert_eq!(
+        spec_objects[0].comments_before,
+        vec![" first object ".to_string()]
+    );
+
+    let values = &spec_objects[0].attributes;
+    assert_eq!(values.len(), 2);
+    assert_eq!(
+        values[0].comments_before(),
+        &[" chapter name follows ".to_string()]
+    );
+    assert_eq!(
+        values[1].comments_before(),
+        &[" body text follows ".to_string()]
+    );
+
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}
+
+/// Multiple comments stacked above one sibling are preserved in source order.
+/// This verifies the `pending_comments` accumulator flushes its entire vec
+/// onto the next element, not just the latest.
+#[test]
+fn multiple_consecutive_comments_round_trip_in_order() {
+    let src = r#"<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd">
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <SPEC-TYPES>
+        <!-- first comment -->
+        <!-- second comment -->
+        <SPEC-OBJECT-TYPE IDENTIFIER="SOT-1" LONG-NAME="One"/>
+      </SPEC-TYPES>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>
+"#;
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}
+
 /// `<TOOL-EXTENSIONS>` empty open/close form must round-trip as open/close
 /// (NOT promoted to self-closed) — the Mode 3 invariant is preserved.
 #[test]

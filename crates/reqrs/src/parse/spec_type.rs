@@ -82,6 +82,7 @@ pub(crate) fn parse_spec_type_inner(
         long_name,
         was_self_closing,
         spec_attributes,
+        comments_before: Vec::new(),
     };
 
     Ok(build_variant(variant, common))

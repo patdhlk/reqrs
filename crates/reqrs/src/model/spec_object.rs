@@ -34,4 +34,9 @@ pub struct SpecObject {
     /// Source order of `<TYPE>` and `<VALUES>` children. Always exactly two
     /// entries for a well-formed `<SPEC-OBJECT>`; either ordering is legal.
     pub children_order: Vec<SpecObjectChildTag>,
+    /// Inline `<!-- ... -->` comments captured between the previous sibling
+    /// (or `<SPEC-OBJECTS>` open) and this element. Each string is the
+    /// comment body (no `<!--` / `-->` delimiters), in source order. Round-trip
+    /// emits one comment per line above the element. Defaults to `vec![]`.
+    pub comments_before: Vec<String>,
 }

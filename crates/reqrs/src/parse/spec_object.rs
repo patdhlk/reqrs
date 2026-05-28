@@ -98,6 +98,7 @@ pub(crate) fn parse_spec_object_inner(
                     spec_object_type,
                     attributes,
                     children_order,
+                    comments_before: Vec::new(),
                 });
             }
             Event::Eof => {

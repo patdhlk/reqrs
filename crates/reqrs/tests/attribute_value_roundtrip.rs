@@ -6,6 +6,8 @@
 //! `unparse_attribute_value` and asserts byte-exact equality.
 
 use pretty_assertions::assert_eq;
+use reqrs::AttributeDefId;
+use reqrs::model::{AttributeValue, AttributeValueString};
 use reqrs::parse::attribute_value::parse_attribute_value;
 use reqrs::unparse::attribute_value::unparse_attribute_value;
 
@@ -105,4 +107,26 @@ fn xhtml_value_with_namespaced_inline_markup() {
     // — `capture_inner_raw` does not parse the inner content.
     let xml = "            <ATTRIBUTE-VALUE-XHTML>\n              <DEFINITION>\n                <ATTRIBUTE-DEFINITION-XHTML-REF>AD-X</ATTRIBUTE-DEFINITION-XHTML-REF>\n              </DEFINITION>\n              <THE-VALUE><reqif-xhtml:p>para</reqif-xhtml:p></THE-VALUE>\n            </ATTRIBUTE-VALUE-XHTML>\n";
     round_trip(xml);
+}
+
+#[test]
+fn attribute_value_with_comments_before_emits_at_12_space_indent() {
+    // An AttributeValue carrying `comments_before` re-emits each comment on
+    // its own line at the 12-space ATTRIBUTE-VALUE-* indent. The
+    // `comments_before()` enum helper exposes the same slot on every variant.
+    let av = AttributeValue::String(AttributeValueString {
+        definition_ref: AttributeDefId::new("AD-S"),
+        value: "Section title".into(),
+        comments_before: vec![" first comment ".into(), " second comment ".into()],
+    });
+    let out = unparse_attribute_value(&av);
+    let expected = "            <!-- first comment -->\n            <!-- second comment -->\n            <ATTRIBUTE-VALUE-STRING THE-VALUE=\"Section title\">\n              <DEFINITION>\n                <ATTRIBUTE-DEFINITION-STRING-REF>AD-S</ATTRIBUTE-DEFINITION-STRING-REF>\n              </DEFINITION>\n            </ATTRIBUTE-VALUE-STRING>\n";
+    assert_eq!(out, expected);
+    assert_eq!(
+        av.comments_before(),
+        &[
+            " first comment ".to_string(),
+            " second comment ".to_string()
+        ]
+    );
 }

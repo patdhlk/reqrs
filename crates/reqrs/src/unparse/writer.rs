@@ -93,6 +93,24 @@ pub(crate) fn write_close(out: &mut String, indent: &str, tag: &str) {
     out.push_str(">\n");
 }
 
+/// Emit each captured inline `<!-- ... -->` comment on its own line at
+/// `indent`, exactly recreating the source body between the `<!--` and `-->`
+/// delimiters. Used by element unparsers that own a `comments_before` slot
+/// (SpecType, SpecObject, AttributeValue) so their leading inter-sibling
+/// comments survive round-trip.
+///
+/// No escaping is performed — XML 1.0 forbids `--` inside comments at the
+/// parser level, so a value captured by quick-xml's `Event::Comment` is
+/// already safe to re-emit verbatim.
+pub(crate) fn emit_comments_before(out: &mut String, indent: &str, comments: &[String]) {
+    for c in comments {
+        out.push_str(indent);
+        out.push_str("<!--");
+        out.push_str(c);
+        out.push_str("-->\n");
+    }
+}
+
 /// Emit a text-content element on one line: `{indent}<TAG>{escaped_text}</TAG>\n`.
 /// Emits nothing when `value` is `None`.
 pub(crate) fn write_text_element(out: &mut String, indent: &str, tag: &str, value: Option<&str>) {

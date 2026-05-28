@@ -43,22 +43,35 @@ pub fn parse_attribute_value(xml: &str) -> Result<AttributeValue, ReqIfError> {
 /// Drive a `<VALUES>` block: read every `<ATTRIBUTE-VALUE-*>` child until the
 /// closing `</VALUES>` is reached, returning the collected typed values.
 ///
+/// Inter-sibling `Event::Comment` events are accumulated into
+/// `pending_comments` and attached to the next element's `comments_before`
+/// field. Trailing comments after the final element are dropped (no model
+/// slot for them — no corpus fixture exercises this case).
+///
 /// Precondition: the caller has just consumed the `<VALUES>` start event.
 pub(crate) fn parse_attribute_values_inner(
     r: &mut ReqIfReader<'_>,
 ) -> Result<Vec<AttributeValue>, ReqIfError> {
     let mut out: Vec<AttributeValue> = Vec::new();
+    let mut pending_comments: Vec<String> = Vec::new();
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                pending_comments.push(String::from_utf8_lossy(c.as_ref()).into_owned());
+            }
             Event::Start(s) => {
                 let tag = s.name().as_ref().to_vec();
                 let owned = s.into_owned();
-                out.push(parse_attribute_value_inner(r, &owned, &tag, false)?);
+                let mut av = parse_attribute_value_inner(r, &owned, &tag, false)?;
+                attach_comments(&mut av, std::mem::take(&mut pending_comments));
+                out.push(av);
             }
             Event::Empty(s) => {
                 let tag = s.name().as_ref().to_vec();
                 let owned = s.into_owned();
-                out.push(parse_attribute_value_inner(r, &owned, &tag, true)?);
+                let mut av = parse_attribute_value_inner(r, &owned, &tag, true)?;
+                attach_comments(&mut av, std::mem::take(&mut pending_comments));
+                out.push(av);
             }
             Event::End(e) if e.name().as_ref() == b"VALUES" => return Ok(out),
             Event::Eof => {
@@ -69,6 +82,21 @@ pub(crate) fn parse_attribute_values_inner(
             }
             _ => continue,
         }
+    }
+}
+
+/// Attach the accumulated inter-sibling comments to the appropriate variant
+/// field. Each variant carries its own `comments_before` slot; the per-variant
+/// match keeps the field handling local and obvious.
+fn attach_comments(av: &mut AttributeValue, comments: Vec<String>) {
+    match av {
+        AttributeValue::String(a) => a.comments_before = comments,
+        AttributeValue::Boolean(a) => a.comments_before = comments,
+        AttributeValue::Integer(a) => a.comments_before = comments,
+        AttributeValue::Real(a) => a.comments_before = comments,
+        AttributeValue::Date(a) => a.comments_before = comments,
+        AttributeValue::Xhtml(a) => a.comments_before = comments,
+        AttributeValue::Enumeration(a) => a.comments_before = comments,
     }
 }
 
@@ -98,6 +126,7 @@ pub(crate) fn parse_attribute_value_inner(
             Ok(AttributeValue::String(AttributeValueString {
                 definition_ref,
                 value,
+                comments_before: Vec::new(),
             }))
         }
         b"ATTRIBUTE-VALUE-BOOLEAN" => {
@@ -116,6 +145,7 @@ pub(crate) fn parse_attribute_value_inner(
             Ok(AttributeValue::Boolean(AttributeValueBoolean {
                 definition_ref,
                 value,
+                comments_before: Vec::new(),
             }))
         }
         b"ATTRIBUTE-VALUE-INTEGER" => {
@@ -125,6 +155,7 @@ pub(crate) fn parse_attribute_value_inner(
             Ok(AttributeValue::Integer(AttributeValueInteger {
                 definition_ref,
                 value,
+                comments_before: Vec::new(),
             }))
         }
         b"ATTRIBUTE-VALUE-REAL" => {
@@ -133,6 +164,7 @@ pub(crate) fn parse_attribute_value_inner(
             Ok(AttributeValue::Real(AttributeValueReal {
                 definition_ref,
                 value,
+                comments_before: Vec::new(),
             }))
         }
         b"ATTRIBUTE-VALUE-DATE" => {
@@ -141,6 +173,7 @@ pub(crate) fn parse_attribute_value_inner(
             Ok(AttributeValue::Date(AttributeValueDate {
                 definition_ref,
                 value,
+                comments_before: Vec::new(),
             }))
         }
         b"ATTRIBUTE-VALUE-ENUMERATION" => parse_enumeration_body(r, tag),
@@ -263,6 +296,7 @@ fn parse_enumeration_body(
                     definition_ref,
                     values,
                     was_definition_first,
+                    comments_before: Vec::new(),
                 }));
             }
             Event::Eof => {
@@ -353,6 +387,7 @@ fn parse_xhtml_body(
                     definition_ref,
                     the_value_raw,
                     was_definition_first,
+                    comments_before: Vec::new(),
                 }));
             }
             Event::Eof => {

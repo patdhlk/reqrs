@@ -443,20 +443,32 @@ fn parse_data_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::DataTyp
 }
 
 /// Walk a `<SPEC-TYPES>` block, dispatching each child to
-/// [`parse_spec_type_inner`].
+/// [`parse_spec_type_inner`]. Inter-sibling `Event::Comment` events are
+/// accumulated and attached to the next element's `comments_before`. Trailing
+/// comments after the last sibling are dropped (no current corpus fixture
+/// exercises this position).
 fn parse_spec_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::SpecType>, ReqIfError> {
-    let mut out = Vec::new();
+    use crate::model::SpecType;
+    let mut out: Vec<SpecType> = Vec::new();
+    let mut pending_comments: Vec<String> = Vec::new();
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                pending_comments.push(String::from_utf8_lossy(c.as_ref()).into_owned());
+            }
             Event::Start(s) => {
                 let tag = s.name().as_ref().to_vec();
                 let owned = s.into_owned();
-                out.push(parse_spec_type_inner(r, &owned, &tag, false)?);
+                let mut st = parse_spec_type_inner(r, &owned, &tag, false)?;
+                attach_spec_type_comments(&mut st, std::mem::take(&mut pending_comments));
+                out.push(st);
             }
             Event::Empty(s) => {
                 let tag = s.name().as_ref().to_vec();
                 let owned = s.into_owned();
-                out.push(parse_spec_type_inner(r, &owned, &tag, true)?);
+                let mut st = parse_spec_type_inner(r, &owned, &tag, true)?;
+                attach_spec_type_comments(&mut st, std::mem::take(&mut pending_comments));
+                out.push(st);
             }
             Event::End(e) if e.name().as_ref() == b"SPEC-TYPES" => return Ok(out),
             Event::Eof => {
@@ -470,21 +482,43 @@ fn parse_spec_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::SpecTyp
     }
 }
 
+/// Stash `comments` on the variant's `SpecTypeCommon.comments_before`.
+fn attach_spec_type_comments(st: &mut crate::model::SpecType, comments: Vec<String>) {
+    use crate::model::SpecType;
+    let common = match st {
+        SpecType::SpecObject(t) => &mut t.common,
+        SpecType::Specification(t) => &mut t.common,
+        SpecType::SpecRelation(t) => &mut t.common,
+        SpecType::RelationGroup(t) => &mut t.common,
+    };
+    common.comments_before = comments;
+}
+
 /// Walk a `<SPEC-OBJECTS>` block, dispatching each `<SPEC-OBJECT>` child to
-/// [`parse_spec_object_inner`].
+/// [`parse_spec_object_inner`]. Inter-sibling `Event::Comment` events are
+/// accumulated and attached to the next element's `comments_before`. Trailing
+/// comments after the last sibling are dropped.
 fn parse_spec_objects(
     r: &mut ReqIfReader<'_>,
 ) -> Result<Vec<crate::model::SpecObject>, ReqIfError> {
     let mut out = Vec::new();
+    let mut pending_comments: Vec<String> = Vec::new();
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                pending_comments.push(String::from_utf8_lossy(c.as_ref()).into_owned());
+            }
             Event::Start(s) if s.name().as_ref() == b"SPEC-OBJECT" => {
                 let owned = s.into_owned();
-                out.push(parse_spec_object_inner(r, &owned, false)?);
+                let mut so = parse_spec_object_inner(r, &owned, false)?;
+                so.comments_before = std::mem::take(&mut pending_comments);
+                out.push(so);
             }
             Event::Empty(s) if s.name().as_ref() == b"SPEC-OBJECT" => {
                 let owned = s.into_owned();
-                out.push(parse_spec_object_inner(r, &owned, true)?);
+                let mut so = parse_spec_object_inner(r, &owned, true)?;
+                so.comments_before = std::mem::take(&mut pending_comments);
+                out.push(so);
             }
             Event::End(e) if e.name().as_ref() == b"SPEC-OBJECTS" => return Ok(out),
             Event::Eof => {

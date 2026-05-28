@@ -24,16 +24,10 @@ fn workspace_root() -> PathBuf {
 /// Files where round-trip is known not to be byte-identical today. Each
 /// entry is the path relative to `tests/corpus/`.
 ///
-/// Baseline established 2026-05-28 alongside the .reqifz harness:
-/// 2/3 passed, 1 listed below.
-const KNOWN_FAILURES: &[&str] = &[
-    // Inline XML comments inside the document body are dropped on round-trip.
-    // The parser ignores `Event::Comment` and the model has no slot for it, so
-    // the five `<!-- ... -->` lines in sample1_polarion.reqif disappear. Fix
-    // needs a comment-event path through parser + model + unparser (well over
-    // the 15-minute budget for new failure modes — surfaced 2026-05-28).
-    "examples/04_convert_reqif_to_json/sample_polarion_reqifz.reqifz",
-];
+/// Baseline established 2026-05-28 alongside the .reqifz harness: 2/3 passed,
+/// with the Polarion fixture listed for inline-comment loss. Comment
+/// preservation landed shortly after and the list is now empty (3/3).
+const KNOWN_FAILURES: &[&str] = &[];
 
 #[test]
 fn every_reqifz_in_corpus_round_trips() {

@@ -148,6 +148,7 @@ mod tests {
             spec_object_type: SpecTypeId::new(type_id),
             attributes: vec![],
             children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
+            comments_before: vec![],
         }
     }
 
@@ -159,6 +160,7 @@ mod tests {
             long_name: None,
             was_self_closing: true,
             spec_attributes: None,
+            comments_before: vec![],
         }
     }
 

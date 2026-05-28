@@ -17,7 +17,7 @@
 
 use crate::model::spec_type::*;
 use crate::unparse::attribute_def::unparse_attribute_definition;
-use crate::unparse::writer::{write_close, write_open, write_self_closing};
+use crate::unparse::writer::{emit_comments_before, write_close, write_open, write_self_closing};
 
 const INDENT: &str = "        ";
 const ATTRS_INDENT: &str = "          ";
@@ -33,6 +33,7 @@ pub fn unparse_spec_type(st: &SpecType) -> String {
 
 fn unparse_one(tag: &str, common: &SpecTypeCommon) -> String {
     let mut out = String::new();
+    emit_comments_before(&mut out, INDENT, &common.comments_before);
     let mut attrs = collect_attrs(common);
 
     // Self-closed shape is only legal when the source had no <SPEC-ATTRIBUTES>

@@ -16,47 +16,50 @@
 //! per-variant `was_definition_first` flag captured during parse.
 
 use crate::model::attribute_value::*;
-use crate::unparse::writer::escape_attr;
+use crate::unparse::writer::{emit_comments_before, escape_attr};
 
 const OUTER: &str = "            "; // 12 spaces
 const INNER: &str = "              "; // 14 spaces
 const REF: &str = "                "; // 16 spaces
 
 pub fn unparse_attribute_value(av: &AttributeValue) -> String {
+    let mut out = String::new();
+    emit_comments_before(&mut out, OUTER, av.comments_before());
     match av {
-        AttributeValue::String(a) => unparse_scalar(
+        AttributeValue::String(a) => out.push_str(&unparse_scalar(
             "ATTRIBUTE-VALUE-STRING",
             "ATTRIBUTE-DEFINITION-STRING-REF",
             a.definition_ref.as_str(),
             &a.value,
-        ),
-        AttributeValue::Boolean(a) => unparse_scalar(
+        )),
+        AttributeValue::Boolean(a) => out.push_str(&unparse_scalar(
             "ATTRIBUTE-VALUE-BOOLEAN",
             "ATTRIBUTE-DEFINITION-BOOLEAN-REF",
             a.definition_ref.as_str(),
             if a.value { "true" } else { "false" },
-        ),
-        AttributeValue::Integer(a) => unparse_scalar(
+        )),
+        AttributeValue::Integer(a) => out.push_str(&unparse_scalar(
             "ATTRIBUTE-VALUE-INTEGER",
             "ATTRIBUTE-DEFINITION-INTEGER-REF",
             a.definition_ref.as_str(),
             &a.value,
-        ),
-        AttributeValue::Real(a) => unparse_scalar(
+        )),
+        AttributeValue::Real(a) => out.push_str(&unparse_scalar(
             "ATTRIBUTE-VALUE-REAL",
             "ATTRIBUTE-DEFINITION-REAL-REF",
             a.definition_ref.as_str(),
             &a.value,
-        ),
-        AttributeValue::Date(a) => unparse_scalar(
+        )),
+        AttributeValue::Date(a) => out.push_str(&unparse_scalar(
             "ATTRIBUTE-VALUE-DATE",
             "ATTRIBUTE-DEFINITION-DATE-REF",
             a.definition_ref.as_str(),
             &a.value,
-        ),
-        AttributeValue::Enumeration(a) => unparse_enumeration(a),
-        AttributeValue::Xhtml(a) => unparse_xhtml(a),
+        )),
+        AttributeValue::Enumeration(a) => out.push_str(&unparse_enumeration(a)),
+        AttributeValue::Xhtml(a) => out.push_str(&unparse_xhtml(a)),
     }
+    out
 }
 
 /// Emit a scalar `<ATTRIBUTE-VALUE-*>` whose value lives in the `THE-VALUE`

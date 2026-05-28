@@ -46,6 +46,22 @@ impl AttributeValue {
             AttributeValue::Enumeration(a) => &a.definition_ref,
         }
     }
+
+    /// Inline `<!-- ... -->` comments captured immediately before this value
+    /// inside its parent `<VALUES>` block, in source order. Each entry is the
+    /// raw body between `<!--` and `-->` (delimiters NOT included). Round-trip
+    /// emits them as lines above the element at the element's own indent.
+    pub fn comments_before(&self) -> &[String] {
+        match self {
+            AttributeValue::String(a) => &a.comments_before,
+            AttributeValue::Boolean(a) => &a.comments_before,
+            AttributeValue::Integer(a) => &a.comments_before,
+            AttributeValue::Real(a) => &a.comments_before,
+            AttributeValue::Date(a) => &a.comments_before,
+            AttributeValue::Xhtml(a) => &a.comments_before,
+            AttributeValue::Enumeration(a) => &a.comments_before,
+        }
+    }
 }
 
 /// `<ATTRIBUTE-VALUE-STRING THE-VALUE="…">` — the value bytes are raw.
@@ -53,6 +69,9 @@ impl AttributeValue {
 pub struct AttributeValueString {
     pub definition_ref: AttributeDefId,
     pub value: String,
+    /// Inter-sibling comments captured before this element inside `<VALUES>`.
+    /// See [`AttributeValue::comments_before`] for the contract.
+    pub comments_before: Vec<String>,
 }
 
 /// `<ATTRIBUTE-VALUE-BOOLEAN THE-VALUE="true|false">` — parsed.
@@ -60,6 +79,8 @@ pub struct AttributeValueString {
 pub struct AttributeValueBoolean {
     pub definition_ref: AttributeDefId,
     pub value: bool,
+    /// See [`AttributeValue::comments_before`].
+    pub comments_before: Vec<String>,
 }
 
 /// `<ATTRIBUTE-VALUE-INTEGER THE-VALUE="…">` — value kept as text to preserve
@@ -68,6 +89,8 @@ pub struct AttributeValueBoolean {
 pub struct AttributeValueInteger {
     pub definition_ref: AttributeDefId,
     pub value: String,
+    /// See [`AttributeValue::comments_before`].
+    pub comments_before: Vec<String>,
 }
 
 /// `<ATTRIBUTE-VALUE-REAL THE-VALUE="…">` — value kept as text to preserve
@@ -76,6 +99,8 @@ pub struct AttributeValueInteger {
 pub struct AttributeValueReal {
     pub definition_ref: AttributeDefId,
     pub value: String,
+    /// See [`AttributeValue::comments_before`].
+    pub comments_before: Vec<String>,
 }
 
 /// `<ATTRIBUTE-VALUE-DATE THE-VALUE="…">` — value kept as text to defer any
@@ -84,6 +109,8 @@ pub struct AttributeValueReal {
 pub struct AttributeValueDate {
     pub definition_ref: AttributeDefId,
     pub value: String,
+    /// See [`AttributeValue::comments_before`].
+    pub comments_before: Vec<String>,
 }
 
 /// `<ATTRIBUTE-VALUE-XHTML>` carries inline XML inside `<THE-VALUE>`.
@@ -101,6 +128,8 @@ pub struct AttributeValueXhtml {
     pub definition_ref: AttributeDefId,
     pub the_value_raw: String,
     pub was_definition_first: bool,
+    /// See [`AttributeValue::comments_before`].
+    pub comments_before: Vec<String>,
 }
 
 /// `<ATTRIBUTE-VALUE-ENUMERATION>` carries a list of `<ENUM-VALUE-REF>` inside
@@ -116,6 +145,8 @@ pub struct AttributeValueEnumeration {
     pub definition_ref: AttributeDefId,
     pub values: Vec<EnumValueId>,
     pub was_definition_first: bool,
+    /// See [`AttributeValue::comments_before`].
+    pub comments_before: Vec<String>,
 }
 
 #[cfg(test)]
@@ -127,12 +158,14 @@ mod tests {
         let s = AttributeValue::String(AttributeValueString {
             definition_ref: AttributeDefId::new("AD-S"),
             value: "x".into(),
+            comments_before: vec![],
         });
         assert_eq!(s.definition_ref().as_str(), "AD-S");
 
         let b = AttributeValue::Boolean(AttributeValueBoolean {
             definition_ref: AttributeDefId::new("AD-B"),
             value: true,
+            comments_before: vec![],
         });
         assert_eq!(b.definition_ref().as_str(), "AD-B");
 
@@ -140,7 +173,25 @@ mod tests {
             definition_ref: AttributeDefId::new("AD-E"),
             values: vec![EnumValueId::new("EV-1")],
             was_definition_first: true,
+            comments_before: vec![],
         });
         assert_eq!(e.definition_ref().as_str(), "AD-E");
+    }
+
+    #[test]
+    fn comments_before_helper_returns_each_variant_comments() {
+        let s = AttributeValue::String(AttributeValueString {
+            definition_ref: AttributeDefId::new("AD-S"),
+            value: "x".into(),
+            comments_before: vec![" leading ".into()],
+        });
+        assert_eq!(s.comments_before(), &[String::from(" leading ")]);
+
+        let empty = AttributeValue::Integer(AttributeValueInteger {
+            definition_ref: AttributeDefId::new("AD-I"),
+            value: "0".into(),
+            comments_before: vec![],
+        });
+        assert!(empty.comments_before().is_empty());
     }
 }

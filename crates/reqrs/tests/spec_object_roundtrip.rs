@@ -7,8 +7,10 @@
 //! `<SPEC-OBJECT-TYPE-REF>` and `<ATTRIBUTE-VALUE-*>` at 12.
 
 use pretty_assertions::assert_eq;
+use reqrs::model::{AttributeValue, AttributeValueString, SpecObject, SpecObjectChildTag};
 use reqrs::parse::spec_object::parse_spec_object;
 use reqrs::unparse::spec_object::unparse_spec_object;
+use reqrs::{AttributeDefId, SpecObjectId, SpecTypeId};
 
 fn round_trip(xml: &str) {
     let so = parse_spec_object(xml).unwrap();
@@ -87,4 +89,70 @@ fn spec_object_with_multiple_attribute_values() {
         </SPEC-OBJECT>
 "#;
     round_trip(xml);
+}
+
+#[test]
+fn spec_object_with_comments_before_emits_above_element() {
+    // The standalone `parse_spec_object` skips events before the first start
+    // (so a leading `<!--` outside the element is not visible to it), but a
+    // SpecObject value constructed with a non-empty `comments_before` must
+    // emit those comments at the SPEC-OBJECT indent level when unparsed.
+    let so = SpecObject {
+        identifier: SpecObjectId::new("SO-1"),
+        description: None,
+        last_change: None,
+        long_name: None,
+        spec_object_type: SpecTypeId::new("ST-1"),
+        attributes: vec![],
+        children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
+        comments_before: vec![" header for SO-1 ".into()],
+    };
+    let out = unparse_spec_object(&so);
+    let expected = r#"        <!-- header for SO-1 -->
+        <SPEC-OBJECT IDENTIFIER="SO-1">
+          <TYPE>
+            <SPEC-OBJECT-TYPE-REF>ST-1</SPEC-OBJECT-TYPE-REF>
+          </TYPE>
+          <VALUES/>
+        </SPEC-OBJECT>
+"#;
+    assert_eq!(out, expected);
+}
+
+#[test]
+fn spec_object_with_comment_before_inner_attribute_value_emits_at_12_space_indent() {
+    // A comment on an AttributeValue inside `<VALUES>` is emitted at the
+    // 12-space indent that matches the element it precedes — mirrors the
+    // Polarion fixture's `<!-- Section title (ReqIF.ChapterName) -->` line.
+    let av = AttributeValue::String(AttributeValueString {
+        definition_ref: AttributeDefId::new("AD-1"),
+        value: "Section 1".into(),
+        comments_before: vec![" section title ".into()],
+    });
+    let so = SpecObject {
+        identifier: SpecObjectId::new("SO-1"),
+        description: None,
+        last_change: None,
+        long_name: None,
+        spec_object_type: SpecTypeId::new("ST-1"),
+        attributes: vec![av],
+        children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
+        comments_before: vec![],
+    };
+    let out = unparse_spec_object(&so);
+    let expected = r#"        <SPEC-OBJECT IDENTIFIER="SO-1">
+          <TYPE>
+            <SPEC-OBJECT-TYPE-REF>ST-1</SPEC-OBJECT-TYPE-REF>
+          </TYPE>
+          <VALUES>
+            <!-- section title -->
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="Section 1">
+              <DEFINITION>
+                <ATTRIBUTE-DEFINITION-STRING-REF>AD-1</ATTRIBUTE-DEFINITION-STRING-REF>
+              </DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+        </SPEC-OBJECT>
+"#;
+    assert_eq!(out, expected);
 }
