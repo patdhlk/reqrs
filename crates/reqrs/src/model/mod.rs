@@ -2,6 +2,7 @@ pub mod attribute_def;
 pub mod attribute_value;
 pub mod data_type;
 pub mod header;
+pub mod spec_type;
 
 pub use attribute_def::{
     AttributeDefCommon, AttributeDefinition, AttributeDefinitionBoolean, AttributeDefinitionDate,
@@ -18,3 +19,7 @@ pub use data_type::{
     DataTypeReal, DataTypeString, DataTypeXhtml, EnumValue,
 };
 pub use header::{RepositoryId, ReqIfHeader};
+pub use spec_type::{
+    RelationGroupType, SpecObjectType, SpecRelationType, SpecType, SpecTypeCommon,
+    SpecificationType,
+};
