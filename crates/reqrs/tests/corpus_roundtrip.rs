@@ -60,15 +60,19 @@ const KNOWN_FAILURES: &[&str] = &[
     "reqif_software/ReqIF_Studio/01_anonimized_example/sample.reqif",
     "reqif_software/SparxSystems_Enterprise_Architect_8.0/01_example/sample.reqif",
     // Mode 2: vendor-specific xmlns attributes dropped.
+    // FIXED 2026-05-28 (Task 24): NamespaceInfo.attributes_in_order now
+    // captures the full attribute list in source order; the unparser walks
+    // it to emit byte-exact. Doors/03 and Doors/05 now round-trip cleanly.
+    // The remaining five Doors / examples/02 files still fail — but on Mode 3
+    // (empty paired-tag SPEC-RELATIONS / SPEC-RELATION-GROUPS), not Mode 2 —
+    // and are listed below under Mode 3.
+    // Mode 3: empty paired-tag container collapsed to self-closed.
     "reqif_software/Doors/01_anonimized_example_date_data_type/sample.reqif",
     "reqif_software/Doors/02_example_from_a_user/sample.reqif",
-    "reqif_software/Doors/03_example_from_a_user/sample.reqif",
     "reqif_software/Doors/04_example_from_a_user/sample.reqif",
-    "reqif_software/Doors/05_example_from_a_user/sample.reqif",
     "reqif_software/Doors/06_example_from_a_user/sample.reqif",
-    "examples/02_read_reqif/input.reqif",
-    // Mode 3: empty paired-tag container collapsed to self-closed.
     "reqif_software/Doors/10_example_capella_requirements_vp/sample.reqif",
+    "examples/02_read_reqif/input.reqif",
     "examples/04_convert_reqif_to_json/sample2_sdoc.reqif",
 ];
 

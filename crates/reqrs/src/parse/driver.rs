@@ -228,32 +228,39 @@ fn locate_root(r: &mut ReqIfReader<'_>) -> Result<(BytesStart<'static>, bool), R
 /// Harvest the XML namespace declarations + xml:lang + xsi:schemaLocation
 /// attributes off the `<REQ-IF>` start event into a [`NamespaceInfo`].
 ///
-/// `original_reqif_tag_dump` is intentionally left as `None`: the Python
-/// reference serializes the empty root through lxml to round-trip vendor
-/// attribute orderings byte-exact, but lxml-style fidelity is out of scope for
-/// v1. The unparser instead reconstructs a canonical opener in the standard
-/// attribute order used by every ReqIF tool we have a fixture for.
+/// Populates the typed fields for ergonomic introspection AND
+/// `attributes_in_order` with every attribute in source order. The latter is
+/// what the unparser walks for byte-exact round-trip — it preserves both the
+/// original ordering (which varies between vendors) and any vendor-specific
+/// attributes (e.g. `xmlns:doors`, `xmlns:reqif-common`) that the typed
+/// fields do not model.
+///
+/// `original_reqif_tag_dump` is intentionally left as `None`: the byte-exact
+/// reconstruction goes through `attributes_in_order`, which is sufficient for
+/// every vendor we have a fixture for and avoids storing the raw tag.
 fn harvest_namespace_info(start: &BytesStart<'_>) -> NamespaceInfo {
     let mut info = NamespaceInfo::default();
     for attr in start.attributes().flatten() {
-        let key = attr.key.as_ref();
+        let key_bytes = attr.key.as_ref();
+        let key_str = String::from_utf8_lossy(key_bytes).into_owned();
         let value = match attr.unescape_value() {
             Ok(cow) => cow.into_owned(),
             Err(_) => String::from_utf8_lossy(&attr.value).into_owned(),
         };
-        match key {
-            b"xmlns" => info.namespace = Some(value),
-            b"xmlns:configuration" => info.configuration = Some(value),
-            b"xmlns:id" => info.namespace_id = Some(value),
-            b"xmlns:xhtml" => info.namespace_xhtml = Some(value),
-            b"xmlns:xsi" => info.schema_namespace = Some(value),
-            b"xsi:schemaLocation" => info.schema_location = Some(value),
-            b"xml:lang" => info.language = Some(value),
-            // Other attributes on <REQ-IF> are not part of the schema and are
-            // discarded (Python parser does the same — it only reads the
-            // namespace-derived fields).
+        match key_bytes {
+            b"xmlns" => info.namespace = Some(value.clone()),
+            b"xmlns:configuration" => info.configuration = Some(value.clone()),
+            b"xmlns:id" => info.namespace_id = Some(value.clone()),
+            b"xmlns:xhtml" => info.namespace_xhtml = Some(value.clone()),
+            b"xmlns:xsi" => info.schema_namespace = Some(value.clone()),
+            b"xsi:schemaLocation" => info.schema_location = Some(value.clone()),
+            b"xml:lang" => info.language = Some(value.clone()),
+            // Vendor-specific attributes (xmlns:doors, xmlns:reqif-common, …)
+            // are not surfaced through typed fields but ARE retained in
+            // `attributes_in_order` below for byte-exact round-trip.
             _ => {}
         }
+        info.attributes_in_order.push((key_str, value));
     }
     info
 }

@@ -152,11 +152,18 @@ fn is_self_closed_root(bundle: &ReqIfBundle) -> bool {
     bundle.header.is_none() && bundle.core_content.is_none() && !bundle.tool_extensions_tag_exists
 }
 
-/// Reconstruct the `<REQ-IF>` opener with namespace attributes in the
-/// canonical order. The closing `>` vs `/>` is chosen by `self_closed`.
+/// Reconstruct the `<REQ-IF>` opener.
 ///
-/// Order chosen (matches Python `unparse_namespace_info` and the Polarion +
-/// Eclipse RMF fixtures):
+/// If [`NamespaceInfo::attributes_in_order`] is non-empty (the normal
+/// parse-then-unparse path), walk it verbatim — this preserves both the
+/// source-order of attributes AND any vendor-specific xmlns declarations
+/// (e.g. `xmlns:doors`, `xmlns:reqif-common`) that the typed fields do not
+/// model. This is required for byte-exact round-trip on Doors and other
+/// vendor fixtures.
+///
+/// Otherwise (synthetic bundle built via [`Default`]), fall back to the
+/// canonical attribute order used by the Python reference and observed
+/// across Polarion / Eclipse RMF fixtures:
 ///
 /// 1. `xmlns`
 /// 2. `xmlns:xsi`
@@ -165,16 +172,24 @@ fn is_self_closed_root(bundle: &ReqIfBundle) -> bool {
 /// 5. `xmlns:xhtml`
 /// 6. `xsi:schemaLocation`
 /// 7. `xml:lang`
+///
+/// The closing `>` vs `/>` is chosen by `self_closed`.
 fn write_root_opener(out: &mut String, ns: &NamespaceInfo, self_closed: bool) {
     out.push_str("<REQ-IF");
 
-    push_attr(out, "xmlns", ns.namespace.as_deref());
-    push_attr(out, "xmlns:xsi", ns.schema_namespace.as_deref());
-    push_attr(out, "xmlns:configuration", ns.configuration.as_deref());
-    push_attr(out, "xmlns:id", ns.namespace_id.as_deref());
-    push_attr(out, "xmlns:xhtml", ns.namespace_xhtml.as_deref());
-    push_attr(out, "xsi:schemaLocation", ns.schema_location.as_deref());
-    push_attr(out, "xml:lang", ns.language.as_deref());
+    if ns.attributes_in_order.is_empty() {
+        push_attr(out, "xmlns", ns.namespace.as_deref());
+        push_attr(out, "xmlns:xsi", ns.schema_namespace.as_deref());
+        push_attr(out, "xmlns:configuration", ns.configuration.as_deref());
+        push_attr(out, "xmlns:id", ns.namespace_id.as_deref());
+        push_attr(out, "xmlns:xhtml", ns.namespace_xhtml.as_deref());
+        push_attr(out, "xsi:schemaLocation", ns.schema_location.as_deref());
+        push_attr(out, "xml:lang", ns.language.as_deref());
+    } else {
+        for (name, value) in &ns.attributes_in_order {
+            push_attr(out, name, Some(value.as_str()));
+        }
+    }
 
     if self_closed {
         out.push_str("/>\n");
@@ -244,5 +259,28 @@ mod tests {
         };
         write_root_opener(&mut out, &ns, false);
         assert_eq!(out, "<REQ-IF xmlns=\"ns\">\n");
+    }
+
+    #[test]
+    fn opener_replays_attributes_in_order_when_present() {
+        // Vendor-specific xmlns declarations interleaved with standard ones,
+        // in a non-canonical order — mirrors what Doors fixtures emit.
+        let mut out = String::new();
+        let ns = NamespaceInfo {
+            // Typed fields are deliberately left out to prove the unparser
+            // does NOT consult them when `attributes_in_order` is populated.
+            attributes_in_order: vec![
+                ("xmlns".into(), "ns".into()),
+                ("xmlns:doors".into(), "doors-ns".into()),
+                ("xmlns:reqif-common".into(), "rc-ns".into()),
+                ("xmlns:xsi".into(), "xsi-ns".into()),
+            ],
+            ..Default::default()
+        };
+        write_root_opener(&mut out, &ns, false);
+        assert_eq!(
+            out,
+            "<REQ-IF xmlns=\"ns\" xmlns:doors=\"doors-ns\" xmlns:reqif-common=\"rc-ns\" xmlns:xsi=\"xsi-ns\">\n"
+        );
     }
 }

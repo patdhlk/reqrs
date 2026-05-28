@@ -13,9 +13,17 @@
 //! - `encoding` — value of `encoding=` on the XML declaration. Kept as
 //!   `Option<String>` so a synthetic bundle created via [`Default`] starts as
 //!   `None`; the unparser may fall back to a sensible default.
-//! - The remaining `Option<String>` fields are the attributes
+//! - The remaining `Option<String>` fields are the *recognized* attributes
 //!   (`xmlns`/`configuration`/`xmlns:id`/`xmlns:xhtml`/`xmlns:xsi`/
-//!   `xsi:schemaLocation`/`xml:lang`) on the `<REQ-IF>` element.
+//!   `xsi:schemaLocation`/`xml:lang`) on the `<REQ-IF>` element. These give
+//!   ergonomic typed access for callers that need to introspect a specific
+//!   namespace.
+//! - `attributes_in_order` captures *every* `<REQ-IF>` attribute (recognized
+//!   or vendor-specific) in source order as `(qualified-name, value)` tuples.
+//!   This is the round-trip-fidelity source-of-truth: the unparser walks it
+//!   to emit the opener byte-exact. If empty (e.g. a synthetic bundle built
+//!   via [`Default`]), the unparser falls back to a canonical attribute order
+//!   built from the typed fields.
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct NamespaceInfo {
@@ -29,4 +37,11 @@ pub struct NamespaceInfo {
     pub schema_namespace: Option<String>,
     pub schema_location: Option<String>,
     pub language: Option<String>,
+    /// All `<REQ-IF>` attributes in their original source order. Each entry is
+    /// `(qualified-name, value)`. Includes recognized attributes (which also
+    /// surface in the typed fields above) as well as vendor-specific ones such
+    /// as `xmlns:doors`, `xmlns:reqif-common`, etc. that the typed fields do
+    /// not model. Populated by the parser; the unparser prefers this vector
+    /// over the typed fields whenever it is non-empty.
+    pub attributes_in_order: Vec<(String, String)>,
 }
