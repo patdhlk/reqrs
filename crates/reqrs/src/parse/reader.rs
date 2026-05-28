@@ -112,7 +112,6 @@ pub(crate) fn required_attr(start: &BytesStart<'_>, name: &str) -> Result<String
 }
 
 /// Look up an optional attribute on a start event.
-#[allow(dead_code)]
 pub(crate) fn optional_attr(start: &BytesStart<'_>, name: &str) -> Option<String> {
     start
         .attributes()

@@ -1,6 +1,6 @@
 macro_rules! id_newtype {
     ($name:ident) => {
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub struct $name(pub String);
 
         impl $name {

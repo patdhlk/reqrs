@@ -1,3 +1,6 @@
+use crate::error::ReqIfError;
+use std::fmt::Write as _;
+
 /// Format mode for the unparser.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormatMode {
@@ -37,69 +40,53 @@ pub(crate) fn escape_text(out: &mut String, s: &str) {
     }
 }
 
-// The element-shaped writers below are consumed by future unparsers (data_type,
-// spec_object, …). `write_text_element` covers the header's needs directly, so
-// these three sit on the shelf until those tasks land. A single module-scoped
-// allow keeps the annotation count at one rather than three.
-#[allow(dead_code)]
-mod element_writers {
-    use super::escape_attr;
-    use crate::error::ReqIfError;
-    use std::fmt::Write as _;
-
-    /// Write a self-closing element with attributes sorted alphabetically by name.
-    pub(crate) fn write_self_closing(
-        out: &mut String,
-        indent: &str,
-        tag: &str,
-        attrs: &mut [(&str, String)],
-    ) -> Result<(), ReqIfError> {
-        attrs.sort_by(|a, b| a.0.cmp(b.0));
-        write!(out, "{indent}<{tag}").map_err(|e| ReqIfError::Schema(e.to_string()))?;
-        for (k, v) in attrs.iter() {
-            out.push(' ');
-            out.push_str(k);
-            out.push_str("=\"");
-            escape_attr(out, v);
-            out.push('"');
-        }
-        out.push_str("/>\n");
-        Ok(())
+/// Write a self-closing element with attributes sorted alphabetically by name.
+pub(crate) fn write_self_closing(
+    out: &mut String,
+    indent: &str,
+    tag: &str,
+    attrs: &mut [(&str, String)],
+) -> Result<(), ReqIfError> {
+    attrs.sort_by(|a, b| a.0.cmp(b.0));
+    write!(out, "{indent}<{tag}").map_err(|e| ReqIfError::Schema(e.to_string()))?;
+    for (k, v) in attrs.iter() {
+        out.push(' ');
+        out.push_str(k);
+        out.push_str("=\"");
+        escape_attr(out, v);
+        out.push('"');
     }
-
-    /// Write an open tag with sorted attributes.
-    pub(crate) fn write_open(
-        out: &mut String,
-        indent: &str,
-        tag: &str,
-        attrs: &mut [(&str, String)],
-    ) -> Result<(), ReqIfError> {
-        attrs.sort_by(|a, b| a.0.cmp(b.0));
-        write!(out, "{indent}<{tag}").map_err(|e| ReqIfError::Schema(e.to_string()))?;
-        for (k, v) in attrs.iter() {
-            out.push(' ');
-            out.push_str(k);
-            out.push_str("=\"");
-            escape_attr(out, v);
-            out.push('"');
-        }
-        out.push_str(">\n");
-        Ok(())
-    }
-
-    /// Write a closing tag.
-    pub(crate) fn write_close(out: &mut String, indent: &str, tag: &str) {
-        out.push_str(indent);
-        out.push_str("</");
-        out.push_str(tag);
-        out.push_str(">\n");
-    }
+    out.push_str("/>\n");
+    Ok(())
 }
 
-// Tests call `write_self_closing` directly; once a real (non-test) caller
-// lands, switch this to an unconditional re-export.
-#[cfg(test)]
-pub(crate) use element_writers::write_self_closing;
+/// Write an open tag with sorted attributes.
+pub(crate) fn write_open(
+    out: &mut String,
+    indent: &str,
+    tag: &str,
+    attrs: &mut [(&str, String)],
+) -> Result<(), ReqIfError> {
+    attrs.sort_by(|a, b| a.0.cmp(b.0));
+    write!(out, "{indent}<{tag}").map_err(|e| ReqIfError::Schema(e.to_string()))?;
+    for (k, v) in attrs.iter() {
+        out.push(' ');
+        out.push_str(k);
+        out.push_str("=\"");
+        escape_attr(out, v);
+        out.push('"');
+    }
+    out.push_str(">\n");
+    Ok(())
+}
+
+/// Write a closing tag.
+pub(crate) fn write_close(out: &mut String, indent: &str, tag: &str) {
+    out.push_str(indent);
+    out.push_str("</");
+    out.push_str(tag);
+    out.push_str(">\n");
+}
 
 /// Emit a text-content element on one line: `{indent}<TAG>{escaped_text}</TAG>\n`.
 /// Emits nothing when `value` is `None`.
@@ -148,5 +135,14 @@ mod tests {
         let mut out = String::new();
         escape_text(&mut out, "a & b < c > d \"e\" 'f'");
         assert_eq!(out, "a &amp; b &lt; c &gt; d \"e\" 'f'");
+    }
+
+    #[test]
+    fn write_open_and_close_pair_emits_balanced_tags() {
+        let mut out = String::new();
+        let mut attrs = vec![("IDENTIFIER", "ID-1".to_string())];
+        write_open(&mut out, "  ", "TAG", &mut attrs).unwrap();
+        write_close(&mut out, "  ", "TAG");
+        assert_eq!(out, "  <TAG IDENTIFIER=\"ID-1\">\n  </TAG>\n");
     }
 }
