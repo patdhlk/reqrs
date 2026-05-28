@@ -1,0 +1,172 @@
+//! `<ATTRIBUTE-DEFINITION-*>` element model.
+//!
+//! Each variant corresponds to a typed attribute definition that lives inside
+//! `<SPEC-ATTRIBUTES>` of a spec-type element (SPEC-OBJECT-TYPE,
+//! SPECIFICATION-TYPE, SPEC-RELATION-TYPE). All variants share the same
+//! `<TYPE>` wrapper child carrying a `<DATATYPE-DEFINITION-*-REF>` text node
+//! pointing at the corresponding `DataType` identifier.
+//!
+//! The optional `<DEFAULT-VALUE>` child is held verbatim as raw XML via
+//! [`DefaultValueRaw`]. This decouples the attribute-definition layer from the
+//! `AttributeValue` parser (Task 9): the bytes are captured by parsing and
+//! re-emitted untouched by unparsing, guaranteeing byte-exact round-trip even
+//! when the inner shape is more elaborate than the current model knows about.
+
+use crate::ids::{AttributeDefId, DataTypeId};
+
+/// Sum-type over the seven typed `<ATTRIBUTE-DEFINITION-*>` elements.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttributeDefinition {
+    String(AttributeDefinitionString),
+    Boolean(AttributeDefinitionBoolean),
+    Integer(AttributeDefinitionInteger),
+    Real(AttributeDefinitionReal),
+    Date(AttributeDefinitionDate),
+    Xhtml(AttributeDefinitionXhtml),
+    Enumeration(AttributeDefinitionEnumeration),
+}
+
+impl AttributeDefinition {
+    /// The element's `IDENTIFIER` attribute.
+    pub fn identifier(&self) -> &AttributeDefId {
+        match self {
+            AttributeDefinition::String(a) => &a.identifier,
+            AttributeDefinition::Boolean(a) => &a.identifier,
+            AttributeDefinition::Integer(a) => &a.identifier,
+            AttributeDefinition::Real(a) => &a.identifier,
+            AttributeDefinition::Date(a) => &a.identifier,
+            AttributeDefinition::Xhtml(a) => &a.identifier,
+            AttributeDefinition::Enumeration(a) => &a.identifier,
+        }
+    }
+
+    /// Identifier of the `<DATATYPE-DEFINITION-*-REF>` text node carried inside `<TYPE>`.
+    pub fn type_ref(&self) -> &DataTypeId {
+        match self {
+            AttributeDefinition::String(a) => &a.type_ref,
+            AttributeDefinition::Boolean(a) => &a.type_ref,
+            AttributeDefinition::Integer(a) => &a.type_ref,
+            AttributeDefinition::Real(a) => &a.type_ref,
+            AttributeDefinition::Date(a) => &a.type_ref,
+            AttributeDefinition::Xhtml(a) => &a.type_ref,
+            AttributeDefinition::Enumeration(a) => &a.type_ref,
+        }
+    }
+}
+
+/// Attributes shared by every `<ATTRIBUTE-DEFINITION-*>` element.
+///
+/// `is_editable` corresponds to the optional `IS-EDITABLE` XML attribute and
+/// parses as `"true"`/`"false"`. `was_self_closing` mirrors the
+/// `DataTypeCommon` precedent and is preserved across round-trip even though
+/// the Python reference unparser never emits the self-closing form (we let the
+/// caller decide).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttributeDefCommon {
+    pub description: Option<String>,
+    pub last_change: Option<String>,
+    pub long_name: Option<String>,
+    pub is_editable: Option<bool>,
+    pub was_self_closing: bool,
+}
+
+/// Verbatim raw inner XML of a `<DEFAULT-VALUE>` block, captured between
+/// `<DEFAULT-VALUE>` and `</DEFAULT-VALUE>` exclusive of the tags themselves.
+///
+/// Holding the bytes as opaque text — including surrounding whitespace —
+/// is what lets the unparser re-emit the block byte-exact, and is what
+/// keeps Task 8 independent of Task 9's typed `AttributeValue` enum.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefaultValueRaw(pub String);
+
+/// Tracks whether `<DEFAULT-VALUE>` was self-closed in the source XML
+/// (`<DEFAULT-VALUE/>`) versus an open/close pair with possibly-empty body.
+/// Carried on the variant structs alongside the raw payload so the unparser
+/// can pick the right form without inspecting the contents.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum DefaultValuePresence {
+    /// No `<DEFAULT-VALUE>` child in the source.
+    #[default]
+    Absent,
+    /// Source had `<DEFAULT-VALUE/>` — emit self-closed.
+    SelfClosed,
+    /// Source had `<DEFAULT-VALUE>...</DEFAULT-VALUE>` — carry inner verbatim.
+    Open(DefaultValueRaw),
+}
+
+/// Order of `<TYPE>` and `<DEFAULT-VALUE>` children as they appeared in the
+/// source XML. Real-world fixtures show both orderings (DEFAULT-VALUE before
+/// TYPE in some, after in others) so round-trip requires preserving it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ChildOrder {
+    /// `<TYPE>` then `<DEFAULT-VALUE>` (or only `<TYPE>` — the canonical case).
+    #[default]
+    TypeThenDefault,
+    /// `<DEFAULT-VALUE>` then `<TYPE>`.
+    DefaultThenType,
+}
+
+macro_rules! ad_struct {
+    ($name:ident { $($field:ident : $ty:ty),* $(,)? }) => {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct $name {
+            pub identifier: AttributeDefId,
+            pub common: AttributeDefCommon,
+            pub type_ref: DataTypeId,
+            pub default_value: DefaultValuePresence,
+            pub child_order: ChildOrder,
+            $(pub $field: $ty,)*
+        }
+    };
+}
+
+ad_struct!(AttributeDefinitionString {});
+ad_struct!(AttributeDefinitionBoolean {});
+ad_struct!(AttributeDefinitionInteger {});
+ad_struct!(AttributeDefinitionReal {});
+ad_struct!(AttributeDefinitionDate {});
+ad_struct!(AttributeDefinitionXhtml {});
+ad_struct!(AttributeDefinitionEnumeration {
+    multi_valued: Option<bool>,
+});
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn common() -> AttributeDefCommon {
+        AttributeDefCommon {
+            description: None,
+            last_change: None,
+            long_name: Some("T".into()),
+            is_editable: None,
+            was_self_closing: false,
+        }
+    }
+
+    #[test]
+    fn identifier_helper_returns_per_variant_id() {
+        let s = AttributeDefinition::String(AttributeDefinitionString {
+            identifier: AttributeDefId::new("AD-S"),
+            common: common(),
+            type_ref: DataTypeId::new("DT-1"),
+            default_value: DefaultValuePresence::Absent,
+            child_order: ChildOrder::TypeThenDefault,
+        });
+        assert_eq!(s.identifier().as_str(), "AD-S");
+        assert_eq!(s.type_ref().as_str(), "DT-1");
+    }
+
+    #[test]
+    fn enumeration_carries_multi_valued() {
+        let e = AttributeDefinitionEnumeration {
+            identifier: AttributeDefId::new("AD-E"),
+            common: common(),
+            type_ref: DataTypeId::new("DT-E"),
+            default_value: DefaultValuePresence::Absent,
+            child_order: ChildOrder::TypeThenDefault,
+            multi_valued: Some(true),
+        };
+        assert_eq!(e.multi_valued, Some(true));
+    }
+}

@@ -4,6 +4,11 @@ use quick_xml::events::{BytesEnd, BytesStart, Event};
 
 pub(crate) struct ReqIfReader<'a> {
     inner: Reader<&'a [u8]>,
+    /// Original input slice held separately. `inner.get_ref()` returns the
+    /// *remaining* slice (it advances on every read), so it cannot be combined
+    /// with `buffer_position()` to recover absolute byte ranges. This handle
+    /// preserves the absolute view needed by `capture_inner_raw`.
+    src: &'a [u8],
     buf: Vec<u8>,
 }
 
@@ -13,6 +18,7 @@ impl<'a> ReqIfReader<'a> {
         inner.config_mut().trim_text(false);
         Self {
             inner,
+            src,
             buf: Vec::with_capacity(1024),
         }
     }
@@ -61,6 +67,54 @@ impl<'a> ReqIfReader<'a> {
                         msg: e.to_string(),
                     });
                 }
+            }
+        }
+    }
+
+    /// Capture every byte between the current cursor and the matching `</end_name>` close
+    /// (exclusive of the close tag itself) as a verbatim UTF-8 string.
+    ///
+    /// Precondition: the matching `<end_name>` start event has already been consumed by
+    /// the caller, so the reader is positioned just inside the element. Nested elements
+    /// of the same name are tracked by depth so the helper terminates at the correct
+    /// close. The captured bytes are returned with original whitespace, escaping, and
+    /// child markup preserved — this is what makes round-tripping XHTML and `DEFAULT-VALUE`
+    /// blocks byte-exact.
+    pub fn capture_inner_raw(&mut self, end_name: &[u8]) -> Result<String, ReqIfError> {
+        let begin = self.inner.buffer_position() as usize;
+        let mut depth = 1usize;
+        loop {
+            self.buf.clear();
+            let pos_before = self.inner.buffer_position() as usize;
+            match self
+                .inner
+                .read_event_into(&mut self.buf)
+                .map_err(|e| ReqIfError::Xml {
+                    pos: self.inner.buffer_position() as usize,
+                    msg: e.to_string(),
+                })? {
+                Event::Start(s) if s.name().as_ref() == end_name => depth += 1,
+                Event::End(e) if e.name().as_ref() == end_name => {
+                    depth -= 1;
+                    if depth == 0 {
+                        // pos_before sits at "<" of the closing tag — quick-xml's offset
+                        // points just before the markup-open angle when InsideMarkup. Capture
+                        // [begin, pos_before) to exclude the close tag itself.
+                        return Ok(
+                            String::from_utf8_lossy(&self.src[begin..pos_before]).into_owned()
+                        );
+                    }
+                }
+                Event::Eof => {
+                    return Err(ReqIfError::Xml {
+                        pos: self.inner.buffer_position() as usize,
+                        msg: format!(
+                            "EOF capturing inside <{}>",
+                            String::from_utf8_lossy(end_name)
+                        ),
+                    });
+                }
+                _ => continue,
             }
         }
     }
@@ -184,6 +238,56 @@ mod tests {
         };
         let text = r.read_text_to_end(&end).unwrap();
         assert_eq!(text, "hello <world>!");
+    }
+
+    #[test]
+    fn capture_inner_raw_preserves_bytes_inside_element() {
+        let xml = b"<OUTER><THE-VALUE>hello <b>world</b></THE-VALUE></OUTER>";
+        let mut r = ReqIfReader::new(xml);
+        loop {
+            match r.read_event().unwrap() {
+                Event::Start(s) if s.name().as_ref() == b"THE-VALUE" => break,
+                Event::Eof => panic!("no THE-VALUE start"),
+                _ => continue,
+            }
+        }
+        assert_eq!(
+            r.capture_inner_raw(b"THE-VALUE").unwrap(),
+            "hello <b>world</b>"
+        );
+    }
+
+    #[test]
+    fn capture_inner_raw_preserves_surrounding_whitespace() {
+        // Mimics a `<DEFAULT-VALUE>` block as it appears in a real ReqIF file:
+        // child element on its own indented line, with trailing whitespace before close.
+        let xml = b"<OUTER>\n              <DEFAULT-VALUE>\n                <ATTRIBUTE-VALUE-STRING THE-VALUE=\"TBD\"/>\n              </DEFAULT-VALUE>\n            </OUTER>";
+        let mut r = ReqIfReader::new(xml);
+        loop {
+            match r.read_event().unwrap() {
+                Event::Start(s) if s.name().as_ref() == b"DEFAULT-VALUE" => break,
+                Event::Eof => panic!("no DEFAULT-VALUE start"),
+                _ => continue,
+            }
+        }
+        assert_eq!(
+            r.capture_inner_raw(b"DEFAULT-VALUE").unwrap(),
+            "\n                <ATTRIBUTE-VALUE-STRING THE-VALUE=\"TBD\"/>\n              "
+        );
+    }
+
+    #[test]
+    fn capture_inner_raw_handles_nested_same_name() {
+        // Sanity: when an inner element shares the close-tag name, depth tracking
+        // must skip over it without terminating early.
+        let xml = b"<W><W>inner</W></W>";
+        let mut r = ReqIfReader::new(xml);
+        // Consume outer <W>.
+        match r.read_event().unwrap() {
+            Event::Start(s) if s.name().as_ref() == b"W" => {}
+            _ => unreachable!(),
+        }
+        assert_eq!(r.capture_inner_raw(b"W").unwrap(), "<W>inner</W>");
     }
 
     #[test]
