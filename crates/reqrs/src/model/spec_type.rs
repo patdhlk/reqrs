@@ -18,6 +18,10 @@
 //! - `Some(vec![ad, ...])` — the source had one or more
 //!   `<ATTRIBUTE-DEFINITION-*>` children.
 
+use chrono::{DateTime, FixedOffset};
+
+use crate::error::ReqIfError;
+use crate::helpers::datetime;
 use crate::ids::SpecTypeId;
 use crate::model::AttributeDefinition;
 
@@ -62,6 +66,17 @@ pub struct SpecTypeCommon {
     /// using the element's own indent. Defaults to `vec![]` when the source
     /// had no comments or when the value is constructed synthetically.
     pub comments_before: Vec<String>,
+}
+
+impl SpecTypeCommon {
+    /// Lazily parse `last_change` as a typed [`DateTime`].
+    ///
+    /// Returns `None` when the source had no `<LAST-CHANGE>` attribute. The
+    /// raw string in [`Self::last_change`] is preserved unchanged so
+    /// byte-fidelity round-trip is unaffected.
+    pub fn last_change_parsed(&self) -> Option<Result<DateTime<FixedOffset>, ReqIfError>> {
+        self.last_change.as_deref().map(datetime::parse)
+    }
 }
 
 macro_rules! spec_type_struct {

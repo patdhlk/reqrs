@@ -12,6 +12,10 @@
 //! re-emitted untouched by unparsing, guaranteeing byte-exact round-trip even
 //! when the inner shape is more elaborate than the current model knows about.
 
+use chrono::{DateTime, FixedOffset};
+
+use crate::error::ReqIfError;
+use crate::helpers::datetime;
 use crate::ids::{AttributeDefId, DataTypeId};
 
 /// Sum-type over the seven typed `<ATTRIBUTE-DEFINITION-*>` elements.
@@ -68,6 +72,17 @@ pub struct AttributeDefCommon {
     pub long_name: Option<String>,
     pub is_editable: Option<bool>,
     pub was_self_closing: bool,
+}
+
+impl AttributeDefCommon {
+    /// Lazily parse `last_change` as a typed [`DateTime`].
+    ///
+    /// Returns `None` when the source had no `<LAST-CHANGE>` attribute. The
+    /// raw string in [`Self::last_change`] is preserved unchanged so
+    /// byte-fidelity round-trip is unaffected.
+    pub fn last_change_parsed(&self) -> Option<Result<DateTime<FixedOffset>, ReqIfError>> {
+        self.last_change.as_deref().map(datetime::parse)
+    }
 }
 
 /// Verbatim raw inner XML of a `<DEFAULT-VALUE>` block, captured between

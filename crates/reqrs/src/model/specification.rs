@@ -10,6 +10,10 @@
 //! order via `xml_node`; we record an explicit [`SpecificationChildTag`]
 //! sequence as the parser walks the body.
 
+use chrono::{DateTime, FixedOffset};
+
+use crate::error::ReqIfError;
+use crate::helpers::datetime;
 use crate::ids::{SpecTypeId, SpecificationId};
 use crate::model::{AttributeValue, SpecHierarchy};
 
@@ -45,4 +49,15 @@ pub struct Specification {
     /// True iff the source had `<VALUES>\n          </VALUES>\n` (empty
     /// open/close form). Same semantics as [`Self::children_empty_open_close`].
     pub values_empty_open_close: bool,
+}
+
+impl Specification {
+    /// Lazily parse `last_change` as a typed [`DateTime`].
+    ///
+    /// Returns `None` when the source had no `<LAST-CHANGE>` attribute. The
+    /// raw string in [`Self::last_change`] is preserved unchanged so
+    /// byte-fidelity round-trip is unaffected.
+    pub fn last_change_parsed(&self) -> Option<Result<DateTime<FixedOffset>, ReqIfError>> {
+        self.last_change.as_deref().map(datetime::parse)
+    }
 }

@@ -13,6 +13,10 @@
 //! lxml-shaped node graph through the model, we record an explicit
 //! [`SpecRelationChildTag`] sequence as the parser walks the body.
 
+use chrono::{DateTime, FixedOffset};
+
+use crate::error::ReqIfError;
+use crate::helpers::datetime;
 use crate::ids::{SpecObjectId, SpecRelationId, SpecTypeId};
 use crate::model::AttributeValue;
 
@@ -46,4 +50,15 @@ pub struct SpecRelation {
     /// (e.g. synthetic construction), the unparser falls back to the canonical
     /// `[Type, Source, Target, Values]` order.
     pub children_order: Vec<SpecRelationChildTag>,
+}
+
+impl SpecRelation {
+    /// Lazily parse `last_change` as a typed [`DateTime`].
+    ///
+    /// Returns `None` when the source had no `<LAST-CHANGE>` attribute. The
+    /// raw string in [`Self::last_change`] is preserved unchanged so
+    /// byte-fidelity round-trip is unaffected.
+    pub fn last_change_parsed(&self) -> Option<Result<DateTime<FixedOffset>, ReqIfError>> {
+        self.last_change.as_deref().map(datetime::parse)
+    }
 }

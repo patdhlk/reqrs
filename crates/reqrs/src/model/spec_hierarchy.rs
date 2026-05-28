@@ -15,6 +15,10 @@
 
 use std::collections::VecDeque;
 
+use chrono::{DateTime, FixedOffset};
+
+use crate::error::ReqIfError;
+use crate::helpers::datetime;
 use crate::ids::SpecObjectId;
 use crate::model::Specification;
 
@@ -42,6 +46,17 @@ pub struct SpecHierarchy {
     /// `true` when the source had `<CHILDREN/>` self-closed. Only meaningful
     /// alongside `children == Some(vec![])`.
     pub was_self_closing_children: bool,
+}
+
+impl SpecHierarchy {
+    /// Lazily parse `last_change` as a typed [`DateTime`].
+    ///
+    /// Returns `None` when the source had no `<LAST-CHANGE>` attribute. The
+    /// raw string in [`Self::last_change`] is preserved unchanged so
+    /// byte-fidelity round-trip is unaffected.
+    pub fn last_change_parsed(&self) -> Option<Result<DateTime<FixedOffset>, ReqIfError>> {
+        self.last_change.as_deref().map(datetime::parse)
+    }
 }
 
 /// Depth-first iterator over a [`Specification`]'s hierarchy tree.

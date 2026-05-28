@@ -4,6 +4,7 @@
 
 pub mod commands;
 pub mod error;
+pub mod helpers;
 pub mod ids;
 pub mod model;
 pub mod parse;
@@ -12,6 +13,7 @@ pub mod specification_iterator;
 pub mod unparse;
 
 pub use error::{ReqIfError, SchemaWarning};
+pub use helpers::datetime;
 pub use ids::{
     AttributeDefId, DataTypeId, EnumValueId, RelationGroupId, SpecObjectId, SpecRelationId,
     SpecTypeId, SpecificationId,

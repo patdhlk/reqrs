@@ -1,3 +1,7 @@
+use chrono::{DateTime, FixedOffset};
+
+use crate::error::ReqIfError;
+use crate::helpers::datetime;
 use crate::ids::{DataTypeId, EnumValueId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +36,17 @@ pub struct DataTypeCommon {
     pub last_change: Option<String>,
     pub long_name: Option<String>,
     pub was_self_closing: bool,
+}
+
+impl DataTypeCommon {
+    /// Lazily parse `last_change` as a typed [`DateTime`].
+    ///
+    /// Returns `None` when the source had no `<LAST-CHANGE>` attribute. The
+    /// raw string in [`Self::last_change`] is preserved unchanged so
+    /// byte-fidelity round-trip is unaffected.
+    pub fn last_change_parsed(&self) -> Option<Result<DateTime<FixedOffset>, ReqIfError>> {
+        self.last_change.as_deref().map(datetime::parse)
+    }
 }
 
 macro_rules! dt_struct {
