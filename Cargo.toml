@@ -9,7 +9,7 @@ repository = "https://github.com/patdhlk/reqrs"
 
 [workspace.dependencies]
 quick-xml = "0.36"
-thiserror = "1"
+thiserror = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 rustc-hash = "2"
