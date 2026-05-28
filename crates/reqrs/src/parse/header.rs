@@ -5,10 +5,17 @@ use quick_xml::events::Event;
 
 pub fn parse_header(xml: &str) -> Result<ReqIfHeader, ReqIfError> {
     let mut r = ReqIfReader::new(xml.as_bytes());
+    parse_header_from_reader(&mut r)
+}
+
+/// Parse a `<REQ-IF-HEADER>` from a reader that is positioned anywhere before the
+/// `<REQ-IF-HEADER>` start tag. Consumes events up through the matching `</REQ-IF-HEADER>`.
+pub(crate) fn parse_header_from_reader(r: &mut ReqIfReader<'_>) -> Result<ReqIfHeader, ReqIfError> {
     // Skip until <REQ-IF-HEADER>.
     let identifier = loop {
         match r.read_event()? {
             Event::Start(s) if s.name().as_ref() == b"REQ-IF-HEADER" => {
+                // Extract the IDENTIFIER attribute into an owned String before re-borrowing `r`.
                 break required_attr(&s, "IDENTIFIER")?;
             }
             Event::Eof => {
@@ -20,7 +27,7 @@ pub fn parse_header(xml: &str) -> Result<ReqIfHeader, ReqIfError> {
             _ => continue,
         }
     };
-    parse_reqif_header_body(&mut r, identifier)
+    parse_reqif_header_body(r, identifier)
 }
 
 fn parse_reqif_header_body(
