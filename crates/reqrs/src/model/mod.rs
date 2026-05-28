@@ -1,4 +1,5 @@
 pub mod attribute_def;
+pub mod attribute_value;
 pub mod data_type;
 pub mod header;
 
@@ -7,6 +8,10 @@ pub use attribute_def::{
     AttributeDefinitionEnumeration, AttributeDefinitionInteger, AttributeDefinitionReal,
     AttributeDefinitionString, AttributeDefinitionXhtml, ChildOrder, DefaultValuePresence,
     DefaultValueRaw,
+};
+pub use attribute_value::{
+    AttributeValue, AttributeValueBoolean, AttributeValueDate, AttributeValueEnumeration,
+    AttributeValueInteger, AttributeValueReal, AttributeValueString, AttributeValueXhtml,
 };
 pub use data_type::{
     DataType, DataTypeBoolean, DataTypeCommon, DataTypeDate, DataTypeEnumeration, DataTypeInteger,

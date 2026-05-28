@@ -166,10 +166,15 @@ impl<'a> ReqIfReader<'a> {
 }
 
 /// Look up a required attribute on a start event, returning a descriptive error otherwise.
+///
+/// XML entity references inside the attribute value (e.g. `&amp;`, `&lt;`,
+/// `&quot;`) are decoded to their literal characters. The unparser's
+/// `escape_attr` re-encodes them on the way out, so the round-trip is
+/// `&amp;` → `&` → `&amp;`.
 pub(crate) fn required_attr(start: &BytesStart<'_>, name: &str) -> Result<String, ReqIfError> {
     for attr in start.attributes().flatten() {
         if attr.key.as_ref() == name.as_bytes() {
-            return Ok(String::from_utf8_lossy(&attr.value).into_owned());
+            return decode_attr_value(start, &attr);
         }
     }
     Err(ReqIfError::MissingAttribute {
@@ -178,13 +183,36 @@ pub(crate) fn required_attr(start: &BytesStart<'_>, name: &str) -> Result<String
     })
 }
 
-/// Look up an optional attribute on a start event.
+/// Look up an optional attribute on a start event. Entity references are
+/// decoded — see [`required_attr`] for the round-trip contract.
 pub(crate) fn optional_attr(start: &BytesStart<'_>, name: &str) -> Option<String> {
-    start
-        .attributes()
-        .flatten()
-        .find(|a| a.key.as_ref() == name.as_bytes())
-        .map(|a| String::from_utf8_lossy(&a.value).into_owned())
+    for attr in start.attributes().flatten() {
+        if attr.key.as_ref() == name.as_bytes() {
+            return decode_attr_value(start, &attr).ok();
+        }
+    }
+    None
+}
+
+/// Decode `attr.value` honoring XML entity references. Falls back to
+/// lossy UTF-8 of the raw bytes if unescaping fails (which would only happen
+/// on malformed entities like an unterminated `&foo`).
+fn decode_attr_value(
+    start: &BytesStart<'_>,
+    attr: &quick_xml::events::attributes::Attribute<'_>,
+) -> Result<String, ReqIfError> {
+    match attr.unescape_value() {
+        Ok(cow) => Ok(cow.into_owned()),
+        Err(e) => Err(ReqIfError::Xml {
+            pos: 0,
+            msg: format!(
+                "failed to unescape attribute {}={:?} on <{}>: {e}",
+                String::from_utf8_lossy(attr.key.as_ref()),
+                String::from_utf8_lossy(&attr.value),
+                String::from_utf8_lossy(start.name().as_ref()),
+            ),
+        }),
+    }
 }
 
 #[cfg(test)]
