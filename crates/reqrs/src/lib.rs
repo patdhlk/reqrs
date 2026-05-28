@@ -2,6 +2,7 @@
 
 //! reqrs — ReqIF parsing and unparsing in Rust.
 
+pub mod commands;
 pub mod error;
 pub mod ids;
 pub mod model;
