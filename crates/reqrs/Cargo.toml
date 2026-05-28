@@ -12,8 +12,9 @@ thiserror.workspace = true
 zip.workspace = true
 chrono.workspace = true
 rustc-hash.workspace = true
+include_dir.workspace = true
+tempfile.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 walkdir.workspace = true
-tempfile.workspace = true

@@ -54,3 +54,55 @@ fn validate_flags_duplicate_identifiers() {
         r.errors
     );
 }
+
+// Note: we deliberately do NOT include a test that clears `$PATH` to
+// exercise the "xmllint missing" branch. Rust's test runner spawns
+// integration tests in parallel threads, and `std::env::set_var` is a
+// process-global, thread-hostile operation (marked `unsafe` since Rust
+// 1.80). Mutating `PATH` here would race with any parallel test that
+// spawns a subprocess (none today, but easily added later — silent
+// breakage). The error message itself is a string literal, exercised
+// only when `xmllint` is genuinely absent from the host. CI images that
+// ship without `xmllint` will hit this path naturally; see the
+// `--use-reqif-schema` integration test below for the happy-path cover.
+
+#[test]
+#[cfg(unix)]
+fn schema_validation_runs_xmllint_when_available() {
+    // Skip silently when xmllint isn't installed — this test asserts the
+    // wiring is correct, not that every CI image has libxml2-utils.
+    if std::process::Command::new("xmllint")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        eprintln!("skipping: xmllint not installed");
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("doc.reqif");
+    // This minimal stub parses cleanly but is NOT schema-valid (it lacks
+    // the required <THE-HEADER> / <CORE-CONTENT> children of <REQ-IF>).
+    // We assert the call completes (returns Ok) and that xmllint's
+    // complaints land in `report.errors` rather than propagating as an
+    // error — that's the contract: schema errors are reportable, not
+    // fatal.
+    std::fs::write(
+        &p,
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"/>
+"#,
+    )
+    .unwrap();
+    let report = validate(ValidateOpts {
+        input: p,
+        use_reqif_schema: true,
+    })
+    .expect("schema validation should not propagate xmllint errors as Err");
+    assert!(
+        !report.errors.is_empty(),
+        "minimal stub should fail XSD validation (missing required children); \
+         got an empty error list — wiring is wrong"
+    );
+}

@@ -5,7 +5,11 @@
 //! implementation supports two layers:
 //!
 //! 1. Strict XSD conformance via the `xmlschema` library, gated on
-//!    `--use-reqif-schema`. Stubbed here; wired in Task 20.
+//!    `--use-reqif-schema`. Implemented here by shelling out to
+//!    `xmllint` against the bundled OMG ReqIF XSD tree (extracted to a
+//!    tempdir on demand). The `include_dir` crate embeds the schemas at
+//!    compile time; missing `xmllint` on `$PATH` surfaces as a clear
+//!    [`ReqIfError::Schema`] with an install hint.
 //! 2. Internal semantic checks that always run after a successful parse —
 //!    these are what this module implements.
 //!
@@ -32,10 +36,19 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::process::Command;
+
+use include_dir::{Dir, include_dir};
 
 use crate::error::ReqIfError;
 use crate::model::ReqIfBundle;
 use crate::parse::ReqIfParser;
+
+/// Embedded OMG ReqIF XSD tree (`reqif.xsd` at the root plus all
+/// imported XHTML modularization schemas). Extracted on demand to a
+/// tempdir whenever [`validate`] is called with
+/// `use_reqif_schema = true`.
+static SCHEMA_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/src/commands/schema");
 
 #[derive(Debug, Clone)]
 pub struct ValidateOpts {
@@ -184,9 +197,48 @@ fn check_dangling_refs(bundle: &ReqIfBundle, report: &mut ValidateReport) {
     }
 }
 
-fn check_xsd(_opts: &ValidateOpts, _report: &mut ValidateReport) -> Result<(), ReqIfError> {
-    // Implemented in Task 20 (xmllint shell-out).
-    Err(ReqIfError::Schema(
-        "schema validation requires Task 20 (xmllint shell-out) to be implemented".into(),
-    ))
+fn check_xsd(opts: &ValidateOpts, report: &mut ValidateReport) -> Result<(), ReqIfError> {
+    // Extract the bundled schema tree to a tempdir. `xmllint` reads the
+    // files synchronously, so we let `TempDir`'s `Drop` clean up once
+    // this function returns.
+    let tmp = tempfile::tempdir()?;
+    SCHEMA_DIR
+        .extract(tmp.path())
+        .map_err(|e| ReqIfError::Schema(format!("failed to extract embedded schema: {e}")))?;
+
+    let xsd_path = tmp.path().join("reqif.xsd");
+    if !xsd_path.exists() {
+        return Err(ReqIfError::Schema(
+            "bundled reqif.xsd not found after extraction (internal bug)".into(),
+        ));
+    }
+
+    let output = Command::new("xmllint")
+        .arg("--noout")
+        .arg("--schema")
+        .arg(&xsd_path)
+        .arg(&opts.input)
+        .output();
+
+    let output = match output {
+        Ok(o) => o,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(ReqIfError::Schema(
+                "xmllint not found on PATH (required for --use-reqif-schema; \
+                 install libxml2-utils on Debian/Ubuntu or libxml2 on macOS via Homebrew)"
+                    .into(),
+            ));
+        }
+        Err(e) => return Err(ReqIfError::Io(e)),
+    };
+
+    if !output.status.success() {
+        let msg = String::from_utf8_lossy(&output.stderr);
+        for line in msg.lines() {
+            if !line.trim().is_empty() {
+                report.errors.push(line.to_owned());
+            }
+        }
+    }
+    Ok(())
 }
