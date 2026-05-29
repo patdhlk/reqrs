@@ -145,6 +145,7 @@ fn emit_values(out: &mut String, s: &Specification, mode: FormatMode) {
     for av in values {
         out.push_str(&unparse_attribute_value(av, mode));
     }
+    emit_comments_before(out, REF_INDENT, &s.values_trailing_comments);
     out.push_str(CHILD_INDENT);
     out.push_str("</VALUES>\n");
 }

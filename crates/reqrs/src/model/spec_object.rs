@@ -43,6 +43,13 @@ pub struct SpecObject {
     /// comment body (no `<!--` / `-->` delimiters), in source order. Round-trip
     /// emits one comment per line above the element. Defaults to `vec![]`.
     pub comments_before: Vec<String>,
+    /// Inline `<!-- ... -->` comments captured AFTER the last
+    /// `<ATTRIBUTE-VALUE-*>` inside `<VALUES>` and before the closing
+    /// `</VALUES>` tag. Each string is the comment body (no `<!--` / `-->`
+    /// delimiters), in source order. Round-trip emits one comment per line at
+    /// the 12-space inner-element indent before `</VALUES>`. Defaults to
+    /// `vec![]`.
+    pub values_trailing_comments: Vec<String>,
 }
 
 impl SpecObject {

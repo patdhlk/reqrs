@@ -78,6 +78,8 @@ fn emit_type(out: &mut String, so: &SpecObject) {
 
 fn emit_values(out: &mut String, so: &SpecObject, mode: FormatMode) {
     if so.attributes.is_empty() {
+        // No `<ATTRIBUTE-VALUE-*>` children — render self-closed
+        // `<VALUES/>` (no inner content to host trailing comments around).
         out.push_str(CHILD_INDENT);
         out.push_str("<VALUES/>\n");
         return;
@@ -87,6 +89,7 @@ fn emit_values(out: &mut String, so: &SpecObject, mode: FormatMode) {
     for av in &so.attributes {
         out.push_str(&unparse_attribute_value(av, mode));
     }
+    emit_comments_before(out, REF_INDENT, &so.values_trailing_comments);
     out.push_str(CHILD_INDENT);
     out.push_str("</VALUES>\n");
 }

@@ -68,6 +68,7 @@ pub(crate) fn parse_spec_object_inner(
     let mut spec_object_type: Option<SpecTypeId> = None;
     let mut attributes: Vec<AttributeValue> = Vec::new();
     let mut children_order: Vec<SpecObjectChildTag> = Vec::with_capacity(2);
+    let mut values_trailing_comments: Vec<String> = Vec::new();
 
     loop {
         match r.read_event()? {
@@ -77,7 +78,9 @@ pub(crate) fn parse_spec_object_inner(
             }
             Event::Start(s) if s.name().as_ref() == b"VALUES" => {
                 children_order.push(SpecObjectChildTag::Values);
-                attributes = parse_attribute_values_inner(r)?;
+                let (avs, trailing) = parse_attribute_values_inner(r)?;
+                attributes = avs;
+                values_trailing_comments = trailing;
             }
             Event::Empty(s) if s.name().as_ref() == b"VALUES" => {
                 let _ = s;
@@ -99,6 +102,7 @@ pub(crate) fn parse_spec_object_inner(
                     attributes,
                     children_order,
                     comments_before: Vec::new(),
+                    values_trailing_comments: std::mem::take(&mut values_trailing_comments),
                 });
             }
             Event::Eof => {

@@ -74,6 +74,7 @@ pub(crate) fn parse_specification_inner(
             children_empty_open_close: false,
             values_empty_open_close: false,
             comments_before: Vec::new(),
+            values_trailing_comments: Vec::new(),
         });
     }
 
@@ -83,6 +84,7 @@ pub(crate) fn parse_specification_inner(
     let mut children_order: Vec<SpecificationChildTag> = Vec::with_capacity(3);
     let mut children_empty_open_close = false;
     let mut values_empty_open_close = false;
+    let mut values_trailing_comments: Vec<String> = Vec::new();
 
     loop {
         match r.read_event()? {
@@ -103,9 +105,10 @@ pub(crate) fn parse_specification_inner(
             }
             Event::Start(s) if s.name().as_ref() == b"VALUES" => {
                 children_order.push(SpecificationChildTag::Values);
-                let vs = parse_attribute_values_inner(r)?;
+                let (vs, trailing) = parse_attribute_values_inner(r)?;
                 values_empty_open_close = vs.is_empty();
                 values = Some(vs);
+                values_trailing_comments = trailing;
             }
             Event::Empty(s) if s.name().as_ref() == b"VALUES" => {
                 let _ = s;
@@ -125,6 +128,7 @@ pub(crate) fn parse_specification_inner(
                     children_empty_open_close,
                     values_empty_open_close,
                     comments_before: Vec::new(),
+                    values_trailing_comments: std::mem::take(&mut values_trailing_comments),
                 });
             }
             Event::Eof => {

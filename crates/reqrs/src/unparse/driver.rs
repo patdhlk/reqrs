@@ -25,7 +25,7 @@ use crate::unparse::spec_object::unparse_spec_object;
 use crate::unparse::spec_relation::unparse_spec_relation;
 use crate::unparse::spec_type::unparse_spec_type;
 use crate::unparse::specification::unparse_specification;
-use crate::unparse::writer::{FormatMode, escape_attr};
+use crate::unparse::writer::{FormatMode, emit_comments_before, escape_attr};
 
 /// Emit a full `<REQ-IF>` document.
 ///
@@ -58,6 +58,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, 
 
             let forms = &content.list_forms;
 
+            // Inner list-child elements are emitted at 8 spaces. Trailing
+            // comments on the container ride at the same 8-space indent
+            // immediately before the closing tag.
+            const LIST_CHILD_INDENT: &str = "        ";
+
             if let Some(data_types) = &content.data_types {
                 if data_types.is_empty() {
                     push_empty_container(&mut out, "DATATYPES", forms.data_types_empty_open_close);
@@ -66,6 +71,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, 
                     for dt in data_types {
                         out.push_str(&unparse_data_type(dt));
                     }
+                    emit_comments_before(
+                        &mut out,
+                        LIST_CHILD_INDENT,
+                        &content.data_types_trailing_comments,
+                    );
                     out.push_str("      </DATATYPES>\n");
                 }
             }
@@ -81,6 +91,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, 
                     for st in spec_types {
                         out.push_str(&unparse_spec_type(st));
                     }
+                    emit_comments_before(
+                        &mut out,
+                        LIST_CHILD_INDENT,
+                        &content.spec_types_trailing_comments,
+                    );
                     out.push_str("      </SPEC-TYPES>\n");
                 }
             }
@@ -97,6 +112,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, 
                     for so in spec_objects {
                         out.push_str(&unparse_spec_object(so, mode));
                     }
+                    emit_comments_before(
+                        &mut out,
+                        LIST_CHILD_INDENT,
+                        &content.spec_objects_trailing_comments,
+                    );
                     out.push_str("      </SPEC-OBJECTS>\n");
                 }
             }
@@ -113,6 +133,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, 
                     for sr in spec_relations {
                         out.push_str(&unparse_spec_relation(sr, mode));
                     }
+                    emit_comments_before(
+                        &mut out,
+                        LIST_CHILD_INDENT,
+                        &content.spec_relations_trailing_comments,
+                    );
                     out.push_str("      </SPEC-RELATIONS>\n");
                 }
             }
@@ -129,6 +154,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, 
                     for spec in specs {
                         out.push_str(&unparse_specification(spec, mode));
                     }
+                    emit_comments_before(
+                        &mut out,
+                        LIST_CHILD_INDENT,
+                        &content.specifications_trailing_comments,
+                    );
                     out.push_str("      </SPECIFICATIONS>\n");
                 }
             }
@@ -145,6 +175,11 @@ pub fn unparse_bundle(bundle: &ReqIfBundle, mode: FormatMode) -> Result<String, 
                     for rg in groups {
                         out.push_str(&unparse_relation_group(rg));
                     }
+                    emit_comments_before(
+                        &mut out,
+                        LIST_CHILD_INDENT,
+                        &content.relation_groups_trailing_comments,
+                    );
                     out.push_str("      </SPEC-RELATION-GROUPS>\n");
                 }
             }

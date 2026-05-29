@@ -62,4 +62,25 @@ pub struct ReqIfContent {
     pub relation_groups: Option<Vec<RelationGroup>>,
     /// Source-form bookkeeping for empty containers. See [`ListForms`].
     pub list_forms: ListForms,
+    /// Inline `<!-- ... -->` comments captured AFTER the last sibling and
+    /// before the closing `</DATATYPES>` tag. Each string is the comment body
+    /// (no `<!--` / `-->` delimiters), in source order. Round-trip emits one
+    /// comment per line at the inner element's 8-space indent before the
+    /// closing container tag. Defaults to `vec![]`.
+    pub data_types_trailing_comments: Vec<String>,
+    /// Trailing comments after the last child of `<SPEC-TYPES>`. See
+    /// [`Self::data_types_trailing_comments`].
+    pub spec_types_trailing_comments: Vec<String>,
+    /// Trailing comments after the last child of `<SPEC-OBJECTS>`. See
+    /// [`Self::data_types_trailing_comments`].
+    pub spec_objects_trailing_comments: Vec<String>,
+    /// Trailing comments after the last child of `<SPEC-RELATIONS>`. See
+    /// [`Self::data_types_trailing_comments`].
+    pub spec_relations_trailing_comments: Vec<String>,
+    /// Trailing comments after the last child of `<SPECIFICATIONS>`. See
+    /// [`Self::data_types_trailing_comments`].
+    pub specifications_trailing_comments: Vec<String>,
+    /// Trailing comments after the last child of `<SPEC-RELATION-GROUPS>`.
+    /// See [`Self::data_types_trailing_comments`].
+    pub relation_groups_trailing_comments: Vec<String>,
 }

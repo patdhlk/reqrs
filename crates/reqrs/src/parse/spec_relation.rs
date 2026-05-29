@@ -87,7 +87,11 @@ pub(crate) fn parse_spec_relation_inner(
             }
             Event::Start(s) if s.name().as_ref() == b"VALUES" => {
                 children_order.push(SpecRelationChildTag::Values);
-                values = Some(parse_attribute_values_inner(r)?);
+                // SpecRelation has no `values_trailing_comments` slot — the
+                // ReqIF corpus has no fixture exercising trailing comments on
+                // `<SPEC-RELATION>/<VALUES>`. Discard the trailing component.
+                let (avs, _trailing) = parse_attribute_values_inner(r)?;
+                values = Some(avs);
             }
             Event::Empty(s) if s.name().as_ref() == b"VALUES" => {
                 let _ = s;

@@ -57,6 +57,7 @@ fn specification_with_comment_before_emits_above_element() {
         children_empty_open_close: false,
         values_empty_open_close: false,
         comments_before: vec![" section header ".into()],
+        values_trailing_comments: vec![],
     };
     let out = unparse_specification(&spec, FormatMode::Passthrough);
     let expected = r#"        <!-- section header -->

@@ -73,6 +73,7 @@ mod tests {
             children_empty_open_close: false,
             values_empty_open_close: false,
             comments_before: Vec::new(),
+            values_trailing_comments: Vec::new(),
         };
         let ids: Vec<&str> = SpecificationIterator::iterate(&spec)
             .map(|h| h.identifier.as_str())
@@ -94,6 +95,7 @@ mod tests {
             children_empty_open_close: false,
             values_empty_open_close: false,
             comments_before: Vec::new(),
+            values_trailing_comments: Vec::new(),
         };
         assert!(SpecificationIterator::iterate(&spec).next().is_none());
     }

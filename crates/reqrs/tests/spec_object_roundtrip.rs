@@ -107,6 +107,7 @@ fn spec_object_with_comments_before_emits_above_element() {
         attributes: vec![],
         children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
         comments_before: vec![" header for SO-1 ".into()],
+        values_trailing_comments: vec![],
     };
     let out = unparse_spec_object(&so, FormatMode::Passthrough);
     let expected = r#"        <!-- header for SO-1 -->
@@ -139,6 +140,7 @@ fn spec_object_with_comment_before_inner_attribute_value_emits_at_12_space_inden
         attributes: vec![av],
         children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
         comments_before: vec![],
+        values_trailing_comments: vec![],
     };
     let out = unparse_spec_object(&so, FormatMode::Passthrough);
     let expected = r#"        <SPEC-OBJECT IDENTIFIER="SO-1">

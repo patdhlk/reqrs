@@ -339,34 +339,40 @@ fn parse_req_if_content(
                 let owned = s.into_owned();
                 match name.as_slice() {
                     b"DATATYPES" => {
-                        let v = parse_data_types(r)?;
+                        let (v, trailing) = parse_data_types(r)?;
                         content.list_forms.data_types_empty_open_close = v.is_empty();
                         content.data_types = Some(v);
+                        content.data_types_trailing_comments = trailing;
                     }
                     b"SPEC-TYPES" => {
-                        let v = parse_spec_types(r)?;
+                        let (v, trailing) = parse_spec_types(r)?;
                         content.list_forms.spec_types_empty_open_close = v.is_empty();
                         content.spec_types = Some(v);
+                        content.spec_types_trailing_comments = trailing;
                     }
                     b"SPEC-OBJECTS" => {
-                        let v = parse_spec_objects(r)?;
+                        let (v, trailing) = parse_spec_objects(r)?;
                         content.list_forms.spec_objects_empty_open_close = v.is_empty();
                         content.spec_objects = Some(v);
+                        content.spec_objects_trailing_comments = trailing;
                     }
                     b"SPEC-RELATIONS" => {
-                        let v = parse_spec_relations(r)?;
+                        let (v, trailing) = parse_spec_relations(r)?;
                         content.list_forms.spec_relations_empty_open_close = v.is_empty();
                         content.spec_relations = Some(v);
+                        content.spec_relations_trailing_comments = trailing;
                     }
                     b"SPECIFICATIONS" => {
-                        let v = parse_specifications(r)?;
+                        let (v, trailing) = parse_specifications(r)?;
                         content.list_forms.specifications_empty_open_close = v.is_empty();
                         content.specifications = Some(v);
+                        content.specifications_trailing_comments = trailing;
                     }
                     b"SPEC-RELATION-GROUPS" => {
-                        let v = parse_relation_groups(r)?;
+                        let (v, trailing) = parse_relation_groups(r)?;
                         content.list_forms.relation_groups_empty_open_close = v.is_empty();
                         content.relation_groups = Some(v);
+                        content.relation_groups_trailing_comments = trailing;
                     }
                     _ => {
                         exceptions.push(
@@ -417,9 +423,13 @@ fn parse_req_if_content(
 /// Walk a `<DATATYPES>` block, dispatching each `<DATATYPE-DEFINITION-*>` child
 /// to [`parse_data_type_inner`]. Inter-sibling `Event::Comment` events are
 /// accumulated and attached to the next element's `common.comments_before`.
-/// Trailing comments after the last sibling are dropped (closed by a follow-up
-/// commit that adds a per-container trailing-comments slot).
-fn parse_data_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::DataType>, ReqIfError> {
+/// Comments that appear AFTER the last sibling and before the closing
+/// `</DATATYPES>` end up in the returned trailing-comments vec — the caller
+/// stashes them in `ReqIfContent::data_types_trailing_comments` so they
+/// survive round-trip.
+fn parse_data_types(
+    r: &mut ReqIfReader<'_>,
+) -> Result<(Vec<crate::model::DataType>, Vec<String>), ReqIfError> {
     let mut out = Vec::new();
     let mut pending_comments: Vec<String> = Vec::new();
     loop {
@@ -441,7 +451,9 @@ fn parse_data_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::DataTyp
                 attach_data_type_comments(&mut dt, std::mem::take(&mut pending_comments));
                 out.push(dt);
             }
-            Event::End(e) if e.name().as_ref() == b"DATATYPES" => return Ok(out),
+            Event::End(e) if e.name().as_ref() == b"DATATYPES" => {
+                return Ok((out, pending_comments));
+            }
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
@@ -470,10 +482,12 @@ fn attach_data_type_comments(dt: &mut crate::model::DataType, comments: Vec<Stri
 
 /// Walk a `<SPEC-TYPES>` block, dispatching each child to
 /// [`parse_spec_type_inner`]. Inter-sibling `Event::Comment` events are
-/// accumulated and attached to the next element's `comments_before`. Trailing
-/// comments after the last sibling are dropped (no current corpus fixture
-/// exercises this position).
-fn parse_spec_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::SpecType>, ReqIfError> {
+/// accumulated and attached to the next element's `comments_before`. Comments
+/// that appear AFTER the last sibling end up in the returned
+/// trailing-comments vec.
+fn parse_spec_types(
+    r: &mut ReqIfReader<'_>,
+) -> Result<(Vec<crate::model::SpecType>, Vec<String>), ReqIfError> {
     use crate::model::SpecType;
     let mut out: Vec<SpecType> = Vec::new();
     let mut pending_comments: Vec<String> = Vec::new();
@@ -496,7 +510,9 @@ fn parse_spec_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::SpecTyp
                 attach_spec_type_comments(&mut st, std::mem::take(&mut pending_comments));
                 out.push(st);
             }
-            Event::End(e) if e.name().as_ref() == b"SPEC-TYPES" => return Ok(out),
+            Event::End(e) if e.name().as_ref() == b"SPEC-TYPES" => {
+                return Ok((out, pending_comments));
+            }
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
@@ -522,11 +538,12 @@ fn attach_spec_type_comments(st: &mut crate::model::SpecType, comments: Vec<Stri
 
 /// Walk a `<SPEC-OBJECTS>` block, dispatching each `<SPEC-OBJECT>` child to
 /// [`parse_spec_object_inner`]. Inter-sibling `Event::Comment` events are
-/// accumulated and attached to the next element's `comments_before`. Trailing
-/// comments after the last sibling are dropped.
+/// accumulated and attached to the next element's `comments_before`. Comments
+/// that appear AFTER the last sibling end up in the returned
+/// trailing-comments vec.
 fn parse_spec_objects(
     r: &mut ReqIfReader<'_>,
-) -> Result<Vec<crate::model::SpecObject>, ReqIfError> {
+) -> Result<(Vec<crate::model::SpecObject>, Vec<String>), ReqIfError> {
     let mut out = Vec::new();
     let mut pending_comments: Vec<String> = Vec::new();
     loop {
@@ -546,7 +563,9 @@ fn parse_spec_objects(
                 so.comments_before = std::mem::take(&mut pending_comments);
                 out.push(so);
             }
-            Event::End(e) if e.name().as_ref() == b"SPEC-OBJECTS" => return Ok(out),
+            Event::End(e) if e.name().as_ref() == b"SPEC-OBJECTS" => {
+                return Ok((out, pending_comments));
+            }
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
@@ -560,10 +579,12 @@ fn parse_spec_objects(
 
 /// Walk a `<SPEC-RELATIONS>` block, dispatching each `<SPEC-RELATION>` child to
 /// [`parse_spec_relation_inner`]. Inter-sibling `Event::Comment` events are
-/// accumulated and attached to the next element's `comments_before`.
+/// accumulated and attached to the next element's `comments_before`. Comments
+/// that appear AFTER the last sibling end up in the returned
+/// trailing-comments vec.
 fn parse_spec_relations(
     r: &mut ReqIfReader<'_>,
-) -> Result<Vec<crate::model::SpecRelation>, ReqIfError> {
+) -> Result<(Vec<crate::model::SpecRelation>, Vec<String>), ReqIfError> {
     let mut out = Vec::new();
     let mut pending_comments: Vec<String> = Vec::new();
     loop {
@@ -583,7 +604,9 @@ fn parse_spec_relations(
                 sr.comments_before = std::mem::take(&mut pending_comments);
                 out.push(sr);
             }
-            Event::End(e) if e.name().as_ref() == b"SPEC-RELATIONS" => return Ok(out),
+            Event::End(e) if e.name().as_ref() == b"SPEC-RELATIONS" => {
+                return Ok((out, pending_comments));
+            }
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
@@ -597,10 +620,12 @@ fn parse_spec_relations(
 
 /// Walk a `<SPECIFICATIONS>` block, dispatching each `<SPECIFICATION>` child to
 /// [`parse_specification_inner`]. Inter-sibling `Event::Comment` events are
-/// accumulated and attached to the next element's `comments_before`.
+/// accumulated and attached to the next element's `comments_before`. Comments
+/// that appear AFTER the last sibling end up in the returned
+/// trailing-comments vec.
 fn parse_specifications(
     r: &mut ReqIfReader<'_>,
-) -> Result<Vec<crate::model::Specification>, ReqIfError> {
+) -> Result<(Vec<crate::model::Specification>, Vec<String>), ReqIfError> {
     let mut out = Vec::new();
     let mut pending_comments: Vec<String> = Vec::new();
     loop {
@@ -620,7 +645,9 @@ fn parse_specifications(
                 spec.comments_before = std::mem::take(&mut pending_comments);
                 out.push(spec);
             }
-            Event::End(e) if e.name().as_ref() == b"SPECIFICATIONS" => return Ok(out),
+            Event::End(e) if e.name().as_ref() == b"SPECIFICATIONS" => {
+                return Ok((out, pending_comments));
+            }
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),
@@ -635,10 +662,11 @@ fn parse_specifications(
 /// Walk a `<SPEC-RELATION-GROUPS>` block, dispatching each `<RELATION-GROUP>`
 /// child to [`parse_relation_group_inner`]. Inter-sibling `Event::Comment`
 /// events are accumulated and attached to the next element's
-/// `comments_before`.
+/// `comments_before`. Comments that appear AFTER the last sibling end up in
+/// the returned trailing-comments vec.
 fn parse_relation_groups(
     r: &mut ReqIfReader<'_>,
-) -> Result<Vec<crate::model::RelationGroup>, ReqIfError> {
+) -> Result<(Vec<crate::model::RelationGroup>, Vec<String>), ReqIfError> {
     let mut out = Vec::new();
     let mut pending_comments: Vec<String> = Vec::new();
     loop {
@@ -658,7 +686,9 @@ fn parse_relation_groups(
                 rg.comments_before = std::mem::take(&mut pending_comments);
                 out.push(rg);
             }
-            Event::End(e) if e.name().as_ref() == b"SPEC-RELATION-GROUPS" => return Ok(out),
+            Event::End(e) if e.name().as_ref() == b"SPEC-RELATION-GROUPS" => {
+                return Ok((out, pending_comments));
+            }
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),

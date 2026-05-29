@@ -164,6 +164,7 @@ mod tests {
             children_empty_open_close: false,
             values_empty_open_close: false,
             comments_before: Vec::new(),
+            values_trailing_comments: Vec::new(),
         }
     }
 
@@ -190,6 +191,7 @@ mod tests {
             children_empty_open_close: false,
             values_empty_open_close: false,
             comments_before: Vec::new(),
+            values_trailing_comments: Vec::new(),
         };
         assert!(SpecHierarchyIter::new(&spec).next().is_none());
     }
@@ -210,6 +212,7 @@ mod tests {
             children_empty_open_close: false,
             values_empty_open_close: false,
             comments_before: Vec::new(),
+            values_trailing_comments: Vec::new(),
         };
         let ids: Vec<&str> = SpecHierarchyIter::new(&spec)
             .map(|h| h.identifier.as_str())

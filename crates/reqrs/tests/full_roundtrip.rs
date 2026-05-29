@@ -295,3 +295,84 @@ fn tool_extensions_empty_open_close_round_trip() {
     let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
     assert_eq!(out, src);
 }
+
+/// A comment appearing AFTER the last `<DATATYPE-DEFINITION-*>` and before the
+/// closing `</DATATYPES>` lands in `ReqIfContent::data_types_trailing_comments`
+/// during parse, and the unparser emits it at the 8-space inner-element indent
+/// before `</DATATYPES>`. Closes the trailing-comments gap noted in the
+/// container walkers' design notes.
+#[test]
+fn data_types_with_trailing_comment_round_trips() {
+    let src = r#"<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd">
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <DATATYPES>
+        <DATATYPE-DEFINITION-STRING IDENTIFIER="DT-1" LONG-NAME="text" MAX-LENGTH="255"/>
+        <!-- trailing comment in DATATYPES -->
+      </DATATYPES>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>
+"#;
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+
+    let content = bundle
+        .core_content
+        .as_ref()
+        .and_then(|cc| cc.req_if_content.as_ref())
+        .expect("REQ-IF-CONTENT must be present");
+    assert_eq!(
+        content.data_types_trailing_comments,
+        vec![" trailing comment in DATATYPES ".to_string()]
+    );
+
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}
+
+/// A comment appearing AFTER the last `<ATTRIBUTE-VALUE-*>` inside
+/// `<SPEC-OBJECT>/<VALUES>` and before the closing `</VALUES>` lands in
+/// `SpecObject::values_trailing_comments`, and the unparser emits it at the
+/// 12-space inner-element indent before `</VALUES>`.
+#[test]
+fn spec_object_values_with_trailing_comment_round_trips() {
+    let src = r#"<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd">
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <SPEC-OBJECTS>
+        <SPEC-OBJECT IDENTIFIER="SO-1">
+          <TYPE>
+            <SPEC-OBJECT-TYPE-REF>SOT-1</SPEC-OBJECT-TYPE-REF>
+          </TYPE>
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="hello">
+              <DEFINITION>
+                <ATTRIBUTE-DEFINITION-STRING-REF>AD-1</ATTRIBUTE-DEFINITION-STRING-REF>
+              </DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+            <!-- trailing comment inside VALUES -->
+          </VALUES>
+        </SPEC-OBJECT>
+      </SPEC-OBJECTS>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>
+"#;
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+
+    let content = bundle
+        .core_content
+        .as_ref()
+        .and_then(|cc| cc.req_if_content.as_ref())
+        .expect("REQ-IF-CONTENT must be present");
+    let so = &content.spec_objects.as_ref().unwrap()[0];
+    assert_eq!(
+        so.values_trailing_comments,
+        vec![" trailing comment inside VALUES ".to_string()]
+    );
+
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}

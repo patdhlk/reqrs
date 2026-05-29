@@ -41,17 +41,21 @@ pub fn parse_attribute_value(xml: &str) -> Result<AttributeValue, ReqIfError> {
 }
 
 /// Drive a `<VALUES>` block: read every `<ATTRIBUTE-VALUE-*>` child until the
-/// closing `</VALUES>` is reached, returning the collected typed values.
+/// closing `</VALUES>` is reached, returning the collected typed values plus
+/// any trailing inline `<!-- ... -->` comments after the last sibling.
 ///
 /// Inter-sibling `Event::Comment` events are accumulated into
 /// `pending_comments` and attached to the next element's `comments_before`
-/// field. Trailing comments after the final element are dropped (no model
-/// slot for them — no corpus fixture exercises this case).
+/// field. Comments that appear AFTER the last `<ATTRIBUTE-VALUE-*>` and before
+/// the closing `</VALUES>` end up in the returned `trailing_comments` vec —
+/// the caller (a `SpecObject` / `Specification` / `SpecRelation` parser)
+/// stashes them in the matching `values_trailing_comments` slot on the
+/// enclosing model type so they survive round-trip.
 ///
 /// Precondition: the caller has just consumed the `<VALUES>` start event.
 pub(crate) fn parse_attribute_values_inner(
     r: &mut ReqIfReader<'_>,
-) -> Result<Vec<AttributeValue>, ReqIfError> {
+) -> Result<(Vec<AttributeValue>, Vec<String>), ReqIfError> {
     let mut out: Vec<AttributeValue> = Vec::new();
     let mut pending_comments: Vec<String> = Vec::new();
     loop {
@@ -73,7 +77,7 @@ pub(crate) fn parse_attribute_values_inner(
                 attach_comments(&mut av, std::mem::take(&mut pending_comments));
                 out.push(av);
             }
-            Event::End(e) if e.name().as_ref() == b"VALUES" => return Ok(out),
+            Event::End(e) if e.name().as_ref() == b"VALUES" => return Ok((out, pending_comments)),
             Event::Eof => {
                 return Err(ReqIfError::Xml {
                     pos: r.buffer_position(),

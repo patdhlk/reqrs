@@ -149,6 +149,7 @@ mod tests {
             attributes: vec![],
             children_order: vec![SpecObjectChildTag::Type, SpecObjectChildTag::Values],
             comments_before: vec![],
+            values_trailing_comments: vec![],
         }
     }
 
