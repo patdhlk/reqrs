@@ -20,7 +20,9 @@
 use crate::model::specification::{Specification, SpecificationChildTag};
 use crate::unparse::attribute_value::unparse_attribute_value;
 use crate::unparse::spec_hierarchy::unparse_spec_hierarchy;
-use crate::unparse::writer::{FormatMode, write_close, write_open, write_self_closing};
+use crate::unparse::writer::{
+    FormatMode, emit_comments_before, write_close, write_open, write_self_closing,
+};
 
 const INDENT: &str = "        "; // 8 spaces
 const CHILD_INDENT: &str = "          "; // 10 spaces
@@ -28,6 +30,7 @@ const REF_INDENT: &str = "            "; // 12 spaces
 
 pub fn unparse_specification(s: &Specification, mode: FormatMode) -> String {
     let mut out = String::new();
+    emit_comments_before(&mut out, INDENT, &s.comments_before);
     let mut attrs = collect_attrs(s);
 
     // Self-closed shape: no children of any kind. Honor it when the source had

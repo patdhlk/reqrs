@@ -73,6 +73,7 @@ pub(crate) fn parse_specification_inner(
             children_order: Vec::new(),
             children_empty_open_close: false,
             values_empty_open_close: false,
+            comments_before: Vec::new(),
         });
     }
 
@@ -123,6 +124,7 @@ pub(crate) fn parse_specification_inner(
                     children_order,
                     children_empty_open_close,
                     values_empty_open_close,
+                    comments_before: Vec::new(),
                 });
             }
             Event::Eof => {

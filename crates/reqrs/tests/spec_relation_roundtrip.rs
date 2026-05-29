@@ -5,9 +5,10 @@
 //! `<SOURCE>` / `<TARGET>` / `<VALUES>` at 10, inner refs at 12.
 
 use pretty_assertions::assert_eq;
-use reqrs::FormatMode;
+use reqrs::model::SpecRelation;
 use reqrs::parse::spec_relation::parse_spec_relation;
 use reqrs::unparse::spec_relation::unparse_spec_relation;
+use reqrs::{FormatMode, SpecObjectId, SpecRelationId, SpecTypeId};
 
 fn round_trip(xml: &str) {
     let sr = parse_spec_relation(xml).unwrap();
@@ -77,6 +78,42 @@ fn spec_relation_source_first_no_values() {
         </SPEC-RELATION>
 "#;
     round_trip(xml);
+}
+
+#[test]
+fn spec_relation_with_comment_before_emits_above_element() {
+    // The standalone `parse_spec_relation` skips events before the first start
+    // (so a leading `<!--` outside the element is not visible to it), but a
+    // SpecRelation value constructed with a non-empty `comments_before` must
+    // emit those comment lines at the 8-space SPEC-RELATION indent
+    // immediately above the outer tag.
+    let sr = SpecRelation {
+        identifier: SpecRelationId::new("SR-1"),
+        description: None,
+        last_change: None,
+        long_name: None,
+        relation_type: SpecTypeId::new("SRT-1"),
+        source: SpecObjectId::new("SO-A"),
+        target: SpecObjectId::new("SO-B"),
+        values: None,
+        children_order: vec![],
+        comments_before: vec![" relation header ".into()],
+    };
+    let out = unparse_spec_relation(&sr, FormatMode::Passthrough);
+    let expected = r#"        <!-- relation header -->
+        <SPEC-RELATION IDENTIFIER="SR-1">
+          <TYPE>
+            <SPEC-RELATION-TYPE-REF>SRT-1</SPEC-RELATION-TYPE-REF>
+          </TYPE>
+          <SOURCE>
+            <SPEC-OBJECT-REF>SO-A</SPEC-OBJECT-REF>
+          </SOURCE>
+          <TARGET>
+            <SPEC-OBJECT-REF>SO-B</SPEC-OBJECT-REF>
+          </TARGET>
+        </SPEC-RELATION>
+"#;
+    assert_eq!(out, expected);
 }
 
 #[test]

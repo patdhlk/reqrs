@@ -18,7 +18,7 @@
 
 use crate::model::spec_relation::{SpecRelation, SpecRelationChildTag};
 use crate::unparse::attribute_value::unparse_attribute_value;
-use crate::unparse::writer::{FormatMode, write_close, write_open};
+use crate::unparse::writer::{FormatMode, emit_comments_before, write_close, write_open};
 
 const INDENT: &str = "        "; // 8 spaces
 const CHILD_INDENT: &str = "          "; // 10 spaces
@@ -26,6 +26,7 @@ const REF_INDENT: &str = "            "; // 12 spaces
 
 pub fn unparse_spec_relation(sr: &SpecRelation, mode: FormatMode) -> String {
     let mut out = String::new();
+    emit_comments_before(&mut out, INDENT, &sr.comments_before);
     let mut attrs = collect_attrs(sr);
     write_open(&mut out, INDENT, "SPEC-RELATION", &mut attrs)
         .expect("writing to String never fails");

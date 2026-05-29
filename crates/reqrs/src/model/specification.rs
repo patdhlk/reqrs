@@ -49,6 +49,13 @@ pub struct Specification {
     /// True iff the source had `<VALUES>\n          </VALUES>\n` (empty
     /// open/close form). Same semantics as [`Self::children_empty_open_close`].
     pub values_empty_open_close: bool,
+    /// Inline `<!-- ... -->` comments captured between the previous sibling
+    /// (or `<SPECIFICATIONS>` open) and this element. Each string is the
+    /// comment body (no `<!--` / `-->` delimiters), in source order. Round-trip
+    /// emits one comment per line above the element using the element's own
+    /// indent. Defaults to `vec![]` when the source had no comments or when
+    /// the value is constructed synthetically.
+    pub comments_before: Vec<String>,
 }
 
 impl Specification {

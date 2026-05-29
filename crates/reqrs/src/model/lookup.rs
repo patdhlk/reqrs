@@ -162,6 +162,7 @@ mod tests {
                 last_change: None,
                 long_name: None,
                 was_self_closing: true,
+                comments_before: vec![],
             },
         });
         let content = ReqIfContent {
@@ -204,6 +205,7 @@ mod tests {
                 last_change: None,
                 long_name: None,
                 was_self_closing: true,
+                comments_before: vec![],
             },
         });
         let content = ReqIfContent {
@@ -265,6 +267,7 @@ mod tests {
             target: SpecObjectId::new("SO-B"),
             values: None,
             children_order: Vec::new(),
+            comments_before: Vec::new(),
         };
         let sr2 = SpecRelation {
             identifier: SpecRelationId::new("SR-2"),
@@ -276,6 +279,7 @@ mod tests {
             target: SpecObjectId::new("SO-C"),
             values: None,
             children_order: Vec::new(),
+            comments_before: Vec::new(),
         };
         let content = ReqIfContent {
             spec_objects: Some(vec![so_a, so_b, so_c]),
@@ -304,6 +308,7 @@ mod tests {
             target: SpecObjectId::new("SO-B"),
             values: None,
             children_order: Vec::new(),
+            comments_before: Vec::new(),
         };
         let content = ReqIfContent {
             spec_objects: Some(vec![so_a, so_b]),

@@ -41,6 +41,7 @@ pub(crate) fn parse_data_type_inner(
         last_change: optional_attr(start, "LAST-CHANGE"),
         long_name: optional_attr(start, "LONG-NAME"),
         was_self_closing,
+        comments_before: Vec::new(),
     };
 
     let dt = match tag {

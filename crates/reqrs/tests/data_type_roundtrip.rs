@@ -1,5 +1,6 @@
 use pretty_assertions::assert_eq;
-use reqrs::model::DataType;
+use reqrs::DataTypeId;
+use reqrs::model::{DataType, DataTypeBoolean, DataTypeCommon};
 use reqrs::parse::data_type::parse_data_type;
 use reqrs::unparse::data_type::unparse_data_type;
 
@@ -67,4 +68,27 @@ fn enumeration_with_values() {
         </DATATYPE-DEFINITION-ENUMERATION>
 "#;
     round_trip(xml);
+}
+
+#[test]
+fn data_type_with_comment_before_emits_above_element() {
+    // The standalone `parse_data_type` skips events before the first start
+    // (so a leading `<!--` outside the element is not visible to it), but a
+    // DataType value constructed with a non-empty `comments_before` must emit
+    // those comment lines at the 8-space DATATYPE-DEFINITION-* indent
+    // immediately above the outer tag. Mirrors the Polarion fixture's
+    // `<!-- "Boolean" data type definition -->` line.
+    let dt = DataType::Boolean(DataTypeBoolean {
+        identifier: DataTypeId::new("DT-BOOL"),
+        common: DataTypeCommon {
+            description: None,
+            last_change: None,
+            long_name: Some("Boolean".into()),
+            was_self_closing: true,
+            comments_before: vec![" Boolean data type ".into()],
+        },
+    });
+    let out = unparse_data_type(&dt);
+    let expected = "        <!-- Boolean data type -->\n        <DATATYPE-DEFINITION-BOOLEAN IDENTIFIER=\"DT-BOOL\" LONG-NAME=\"Boolean\"/>\n";
+    assert_eq!(out, expected);
 }

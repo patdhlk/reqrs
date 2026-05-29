@@ -14,7 +14,7 @@
 //! order: SPEC-RELATIONS → TYPE → SOURCE-SPECIFICATION → TARGET-SPECIFICATION.
 
 use crate::model::relation_group::RelationGroup;
-use crate::unparse::writer::{write_close, write_open};
+use crate::unparse::writer::{emit_comments_before, write_close, write_open};
 
 const INDENT: &str = "        "; // 8 spaces
 const CHILD_INDENT: &str = "          "; // 10 spaces
@@ -22,6 +22,7 @@ const REF_INDENT: &str = "            "; // 12 spaces
 
 pub fn unparse_relation_group(rg: &RelationGroup) -> String {
     let mut out = String::new();
+    emit_comments_before(&mut out, INDENT, &rg.comments_before);
     let mut attrs = collect_attrs(rg);
     write_open(&mut out, INDENT, "RELATION-GROUP", &mut attrs)
         .expect("writing to String never fails");

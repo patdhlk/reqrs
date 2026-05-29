@@ -6,9 +6,11 @@
 //! enter at `level = 1` so their `<SPEC-HIERARCHY>` opens at 12 spaces.
 
 use pretty_assertions::assert_eq;
-use reqrs::FormatMode;
+use reqrs::SpecificationId;
+use reqrs::model::Specification;
 use reqrs::parse::specification::parse_specification;
 use reqrs::unparse::specification::unparse_specification;
+use reqrs::{FormatMode, SpecTypeId};
 
 fn round_trip(xml: &str) {
     let s = parse_specification(xml).unwrap();
@@ -34,6 +36,37 @@ fn specification_canonical_type_then_children() {
         </SPECIFICATION>
 "#;
     round_trip(xml);
+}
+
+#[test]
+fn specification_with_comment_before_emits_above_element() {
+    // The standalone `parse_specification` skips events before the first start
+    // (so a leading `<!--` outside the element is not visible to it), but a
+    // Specification value constructed with a non-empty `comments_before` must
+    // emit those comment lines at the 8-space SPECIFICATION indent
+    // immediately above the outer tag.
+    let spec = Specification {
+        identifier: SpecificationId::new("SPEC-1"),
+        description: None,
+        last_change: None,
+        long_name: Some("Doc".into()),
+        specification_type: Some(SpecTypeId::new("ST-1")),
+        values: None,
+        children: None,
+        children_order: vec![],
+        children_empty_open_close: false,
+        values_empty_open_close: false,
+        comments_before: vec![" section header ".into()],
+    };
+    let out = unparse_specification(&spec, FormatMode::Passthrough);
+    let expected = r#"        <!-- section header -->
+        <SPECIFICATION IDENTIFIER="SPEC-1" LONG-NAME="Doc">
+          <TYPE>
+            <SPECIFICATION-TYPE-REF>ST-1</SPECIFICATION-TYPE-REF>
+          </TYPE>
+        </SPECIFICATION>
+"#;
+    assert_eq!(out, expected);
 }
 
 #[test]

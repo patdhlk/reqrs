@@ -1,5 +1,7 @@
 use crate::model::data_type::*;
-use crate::unparse::writer::{escape_attr, write_close, write_open, write_self_closing};
+use crate::unparse::writer::{
+    emit_comments_before, escape_attr, write_close, write_open, write_self_closing,
+};
 
 const INDENT: &str = "        ";
 
@@ -96,6 +98,7 @@ fn unparse_simple(
     let mut attrs = collect_attrs(identifier, common, extras);
 
     let mut out = String::new();
+    emit_comments_before(&mut out, INDENT, &common.comments_before);
     if common.was_self_closing {
         write_self_closing(&mut out, INDENT, tag, &mut attrs)
             .expect("writing to String never fails");
@@ -110,6 +113,7 @@ fn unparse_enumeration(d: &DataTypeEnumeration) -> String {
     let mut attrs = collect_attrs(d.identifier.as_str(), &d.common, &[]);
 
     let mut out = String::new();
+    emit_comments_before(&mut out, INDENT, &d.common.comments_before);
     if d.common.was_self_closing && d.specified_values.is_none() {
         write_self_closing(
             &mut out,

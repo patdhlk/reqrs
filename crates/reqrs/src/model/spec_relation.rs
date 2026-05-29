@@ -50,6 +50,13 @@ pub struct SpecRelation {
     /// (e.g. synthetic construction), the unparser falls back to the canonical
     /// `[Type, Source, Target, Values]` order.
     pub children_order: Vec<SpecRelationChildTag>,
+    /// Inline `<!-- ... -->` comments captured between the previous sibling
+    /// (or `<SPEC-RELATIONS>` open) and this element. Each string is the
+    /// comment body (no `<!--` / `-->` delimiters), in source order. Round-trip
+    /// emits one comment per line above the element using the element's own
+    /// indent. Defaults to `vec![]` when the source had no comments or when
+    /// the value is constructed synthetically.
+    pub comments_before: Vec<String>,
 }
 
 impl SpecRelation {

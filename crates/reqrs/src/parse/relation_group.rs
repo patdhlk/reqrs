@@ -114,6 +114,7 @@ pub(crate) fn parse_relation_group_inner(
                     source_specification,
                     target_specification,
                     spec_relations,
+                    comments_before: Vec::new(),
                 });
             }
             Event::Eof => {

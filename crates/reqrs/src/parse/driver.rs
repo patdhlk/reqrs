@@ -415,20 +415,31 @@ fn parse_req_if_content(
 }
 
 /// Walk a `<DATATYPES>` block, dispatching each `<DATATYPE-DEFINITION-*>` child
-/// to [`parse_data_type_inner`].
+/// to [`parse_data_type_inner`]. Inter-sibling `Event::Comment` events are
+/// accumulated and attached to the next element's `common.comments_before`.
+/// Trailing comments after the last sibling are dropped (closed by a follow-up
+/// commit that adds a per-container trailing-comments slot).
 fn parse_data_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::DataType>, ReqIfError> {
     let mut out = Vec::new();
+    let mut pending_comments: Vec<String> = Vec::new();
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                pending_comments.push(String::from_utf8_lossy(c.as_ref()).into_owned());
+            }
             Event::Start(s) => {
                 let tag = s.name().as_ref().to_vec();
                 let owned = s.into_owned();
-                out.push(parse_data_type_inner(r, &owned, &tag, false)?);
+                let mut dt = parse_data_type_inner(r, &owned, &tag, false)?;
+                attach_data_type_comments(&mut dt, std::mem::take(&mut pending_comments));
+                out.push(dt);
             }
             Event::Empty(s) => {
                 let tag = s.name().as_ref().to_vec();
                 let owned = s.into_owned();
-                out.push(parse_data_type_inner(r, &owned, &tag, true)?);
+                let mut dt = parse_data_type_inner(r, &owned, &tag, true)?;
+                attach_data_type_comments(&mut dt, std::mem::take(&mut pending_comments));
+                out.push(dt);
             }
             Event::End(e) if e.name().as_ref() == b"DATATYPES" => return Ok(out),
             Event::Eof => {
@@ -440,6 +451,21 @@ fn parse_data_types(r: &mut ReqIfReader<'_>) -> Result<Vec<crate::model::DataTyp
             _ => continue,
         }
     }
+}
+
+/// Stash `comments` on the variant's `DataTypeCommon.comments_before`.
+fn attach_data_type_comments(dt: &mut crate::model::DataType, comments: Vec<String>) {
+    use crate::model::DataType;
+    let common = match dt {
+        DataType::String(d) => &mut d.common,
+        DataType::Boolean(d) => &mut d.common,
+        DataType::Integer(d) => &mut d.common,
+        DataType::Real(d) => &mut d.common,
+        DataType::Date(d) => &mut d.common,
+        DataType::Xhtml(d) => &mut d.common,
+        DataType::Enumeration(d) => &mut d.common,
+    };
+    common.comments_before = comments;
 }
 
 /// Walk a `<SPEC-TYPES>` block, dispatching each child to
@@ -533,20 +559,29 @@ fn parse_spec_objects(
 }
 
 /// Walk a `<SPEC-RELATIONS>` block, dispatching each `<SPEC-RELATION>` child to
-/// [`parse_spec_relation_inner`].
+/// [`parse_spec_relation_inner`]. Inter-sibling `Event::Comment` events are
+/// accumulated and attached to the next element's `comments_before`.
 fn parse_spec_relations(
     r: &mut ReqIfReader<'_>,
 ) -> Result<Vec<crate::model::SpecRelation>, ReqIfError> {
     let mut out = Vec::new();
+    let mut pending_comments: Vec<String> = Vec::new();
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                pending_comments.push(String::from_utf8_lossy(c.as_ref()).into_owned());
+            }
             Event::Start(s) if s.name().as_ref() == b"SPEC-RELATION" => {
                 let owned = s.into_owned();
-                out.push(parse_spec_relation_inner(r, &owned, false)?);
+                let mut sr = parse_spec_relation_inner(r, &owned, false)?;
+                sr.comments_before = std::mem::take(&mut pending_comments);
+                out.push(sr);
             }
             Event::Empty(s) if s.name().as_ref() == b"SPEC-RELATION" => {
                 let owned = s.into_owned();
-                out.push(parse_spec_relation_inner(r, &owned, true)?);
+                let mut sr = parse_spec_relation_inner(r, &owned, true)?;
+                sr.comments_before = std::mem::take(&mut pending_comments);
+                out.push(sr);
             }
             Event::End(e) if e.name().as_ref() == b"SPEC-RELATIONS" => return Ok(out),
             Event::Eof => {
@@ -561,20 +596,29 @@ fn parse_spec_relations(
 }
 
 /// Walk a `<SPECIFICATIONS>` block, dispatching each `<SPECIFICATION>` child to
-/// [`parse_specification_inner`].
+/// [`parse_specification_inner`]. Inter-sibling `Event::Comment` events are
+/// accumulated and attached to the next element's `comments_before`.
 fn parse_specifications(
     r: &mut ReqIfReader<'_>,
 ) -> Result<Vec<crate::model::Specification>, ReqIfError> {
     let mut out = Vec::new();
+    let mut pending_comments: Vec<String> = Vec::new();
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                pending_comments.push(String::from_utf8_lossy(c.as_ref()).into_owned());
+            }
             Event::Start(s) if s.name().as_ref() == b"SPECIFICATION" => {
                 let owned = s.into_owned();
-                out.push(parse_specification_inner(r, &owned, false)?);
+                let mut spec = parse_specification_inner(r, &owned, false)?;
+                spec.comments_before = std::mem::take(&mut pending_comments);
+                out.push(spec);
             }
             Event::Empty(s) if s.name().as_ref() == b"SPECIFICATION" => {
                 let owned = s.into_owned();
-                out.push(parse_specification_inner(r, &owned, true)?);
+                let mut spec = parse_specification_inner(r, &owned, true)?;
+                spec.comments_before = std::mem::take(&mut pending_comments);
+                out.push(spec);
             }
             Event::End(e) if e.name().as_ref() == b"SPECIFICATIONS" => return Ok(out),
             Event::Eof => {
@@ -589,20 +633,30 @@ fn parse_specifications(
 }
 
 /// Walk a `<SPEC-RELATION-GROUPS>` block, dispatching each `<RELATION-GROUP>`
-/// child to [`parse_relation_group_inner`].
+/// child to [`parse_relation_group_inner`]. Inter-sibling `Event::Comment`
+/// events are accumulated and attached to the next element's
+/// `comments_before`.
 fn parse_relation_groups(
     r: &mut ReqIfReader<'_>,
 ) -> Result<Vec<crate::model::RelationGroup>, ReqIfError> {
     let mut out = Vec::new();
+    let mut pending_comments: Vec<String> = Vec::new();
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                pending_comments.push(String::from_utf8_lossy(c.as_ref()).into_owned());
+            }
             Event::Start(s) if s.name().as_ref() == b"RELATION-GROUP" => {
                 let owned = s.into_owned();
-                out.push(parse_relation_group_inner(r, &owned, false)?);
+                let mut rg = parse_relation_group_inner(r, &owned, false)?;
+                rg.comments_before = std::mem::take(&mut pending_comments);
+                out.push(rg);
             }
             Event::Empty(s) if s.name().as_ref() == b"RELATION-GROUP" => {
                 let owned = s.into_owned();
-                out.push(parse_relation_group_inner(r, &owned, true)?);
+                let mut rg = parse_relation_group_inner(r, &owned, true)?;
+                rg.comments_before = std::mem::take(&mut pending_comments);
+                out.push(rg);
             }
             Event::End(e) if e.name().as_ref() == b"SPEC-RELATION-GROUPS" => return Ok(out),
             Event::Eof => {

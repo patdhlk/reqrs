@@ -36,6 +36,13 @@ pub struct DataTypeCommon {
     pub last_change: Option<String>,
     pub long_name: Option<String>,
     pub was_self_closing: bool,
+    /// Inline `<!-- ... -->` comments captured between the previous sibling
+    /// (or `<DATATYPES>` open) and this element. Each string is the comment
+    /// body (the text between `<!--` and `-->`, delimiters not included), in
+    /// source order. Round-trip emits one comment per line above the element
+    /// using the element's own indent. Defaults to `vec![]` when the source
+    /// had no comments or when the value is constructed synthetically.
+    pub comments_before: Vec<String>,
 }
 
 impl DataTypeCommon {

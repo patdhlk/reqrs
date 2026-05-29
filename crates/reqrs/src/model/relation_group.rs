@@ -31,6 +31,13 @@ pub struct RelationGroup {
     /// `<SPEC-RELATION-REF>` text-content children. `None` means the source
     /// had no `<SPEC-RELATIONS>` element.
     pub spec_relations: Option<Vec<SpecRelationId>>,
+    /// Inline `<!-- ... -->` comments captured between the previous sibling
+    /// (or `<SPEC-RELATION-GROUPS>` open) and this element. Each string is the
+    /// comment body (no `<!--` / `-->` delimiters), in source order. Round-trip
+    /// emits one comment per line above the element using the element's own
+    /// indent. Defaults to `vec![]` when the source had no comments or when
+    /// the value is constructed synthetically.
+    pub comments_before: Vec<String>,
 }
 
 impl RelationGroup {
