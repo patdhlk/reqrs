@@ -159,3 +159,26 @@ fn spec_object_with_comment_before_inner_attribute_value_emits_at_12_space_inden
 "#;
     assert_eq!(out, expected);
 }
+
+#[test]
+fn spec_object_with_comment_between_type_and_values() {
+    // An inline `<!-- ... -->` between top-level `<SPEC-OBJECT>` children is
+    // captured in `children_order` as a `Comment` entry and re-emitted at the
+    // 10-space child indent on the unparse side, preserving the source order
+    // verbatim.
+    let xml = r#"        <SPEC-OBJECT IDENTIFIER="SO-1" LONG-NAME="x">
+          <TYPE>
+            <SPEC-OBJECT-TYPE-REF>SOT-1</SPEC-OBJECT-TYPE-REF>
+          </TYPE>
+          <!-- comment between TYPE and VALUES -->
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="hello">
+              <DEFINITION>
+                <ATTRIBUTE-DEFINITION-STRING-REF>AD-1</ATTRIBUTE-DEFINITION-STRING-REF>
+              </DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+        </SPEC-OBJECT>
+"#;
+    round_trip(xml);
+}

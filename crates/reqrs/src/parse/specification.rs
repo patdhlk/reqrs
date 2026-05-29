@@ -88,6 +88,14 @@ pub(crate) fn parse_specification_inner(
 
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                // Inter-child comment between top-level `<SPECIFICATION>`
+                // children (e.g. between `<TYPE>` and `<CHILDREN>`). Push into
+                // the source order so the unparser can interleave on emit.
+                children_order.push(SpecificationChildTag::Comment(
+                    String::from_utf8_lossy(c.as_ref()).into_owned(),
+                ));
+            }
             Event::Start(s) if s.name().as_ref() == b"TYPE" => {
                 children_order.push(SpecificationChildTag::Type);
                 specification_type = Some(read_specification_type_ref(r)?);

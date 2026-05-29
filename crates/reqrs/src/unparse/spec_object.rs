@@ -43,6 +43,11 @@ pub fn unparse_spec_object(so: &SpecObject, mode: FormatMode) -> String {
         match tag {
             SpecObjectChildTag::Type => emit_type(&mut out, so),
             SpecObjectChildTag::Values => emit_values(&mut out, so, mode),
+            SpecObjectChildTag::Comment(body) => {
+                // Inter-child comment at the same 10-space indent that
+                // `<TYPE>` / `<VALUES>` use.
+                emit_comments_before(&mut out, CHILD_INDENT, std::slice::from_ref(body));
+            }
         }
     }
 

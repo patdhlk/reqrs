@@ -65,6 +65,11 @@ pub fn unparse_specification(s: &Specification, mode: FormatMode) -> String {
             SpecificationChildTag::Type => emit_type(&mut out, s),
             SpecificationChildTag::Children => emit_children(&mut out, s),
             SpecificationChildTag::Values => emit_values(&mut out, s, mode),
+            SpecificationChildTag::Comment(body) => {
+                // Inter-child comment at the same 10-space indent that
+                // `<TYPE>` / `<CHILDREN>` / `<VALUES>` use.
+                emit_comments_before(&mut out, CHILD_INDENT, std::slice::from_ref(body));
+            }
         }
     }
 

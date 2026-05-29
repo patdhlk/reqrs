@@ -21,10 +21,16 @@ use crate::model::AttributeValue;
 /// Marker recording which of the two children was seen during parse, in source
 /// order. The unparser iterates this list and re-emits the children in the
 /// recorded order.
+///
+/// The `Comment` variant carries an inline `<!-- ... -->` body that appeared
+/// between two top-level children of `<SPEC-OBJECT>` (e.g. between `<TYPE>`
+/// and `<VALUES>`). The unparser interleaves these comments with `Type` /
+/// `Values` emissions in source order so they survive round-trip.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpecObjectChildTag {
     Type,
     Values,
+    Comment(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

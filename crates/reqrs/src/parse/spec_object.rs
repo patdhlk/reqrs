@@ -72,6 +72,14 @@ pub(crate) fn parse_spec_object_inner(
 
     loop {
         match r.read_event()? {
+            Event::Comment(c) => {
+                // Inter-child comment between top-level `<SPEC-OBJECT>` children
+                // (e.g. between `<TYPE>` and `<VALUES>`). Push into the source
+                // order so the unparser can interleave on emit.
+                children_order.push(SpecObjectChildTag::Comment(
+                    String::from_utf8_lossy(c.as_ref()).into_owned(),
+                ));
+            }
             Event::Start(s) if s.name().as_ref() == b"TYPE" => {
                 children_order.push(SpecObjectChildTag::Type);
                 spec_object_type = Some(read_spec_object_type_ref(r)?);

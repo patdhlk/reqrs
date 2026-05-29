@@ -71,6 +71,31 @@ fn specification_with_comment_before_emits_above_element() {
 }
 
 #[test]
+fn specification_with_comment_between_type_and_children() {
+    // An inline `<!-- ... -->` between top-level `<SPECIFICATION>` children
+    // is captured in `children_order` as a `Comment` entry and re-emitted at
+    // the 10-space child indent on the unparse side, preserving the source
+    // order verbatim.
+    let xml = r#"        <SPECIFICATION IDENTIFIER="SPEC-1" LONG-NAME="Doc">
+          <TYPE>
+            <SPECIFICATION-TYPE-REF>ST-1</SPECIFICATION-TYPE-REF>
+          </TYPE>
+          <!-- comment between TYPE and CHILDREN -->
+          <CHILDREN>
+            <SPEC-HIERARCHY IDENTIFIER="SH-1">
+              <OBJECT>
+                <SPEC-OBJECT-REF>SO-1</SPEC-OBJECT-REF>
+              </OBJECT>
+            </SPEC-HIERARCHY>
+          </CHILDREN>
+        </SPECIFICATION>
+"#;
+    let s = parse_specification(xml).unwrap();
+    let out = unparse_specification(&s, FormatMode::Passthrough);
+    assert_eq!(out, xml, "round-trip mismatch");
+}
+
+#[test]
 fn specification_with_values_first() {
     // Vendor variation: VALUES → TYPE → CHILDREN ordering. children_order
     // captures `[Values, Type, Children]` and the unparser emits in that
