@@ -27,7 +27,7 @@ pub mod reqifz;
 pub mod specification_iterator;
 pub mod unparse;
 
-pub use error::{ReqIfError, SchemaWarning};
+pub use error::{Issue, IssueId, IssueKind, Location, ReqIfError};
 pub use helpers::datetime;
 pub use ids::{
     AttributeDefId, DataTypeId, EnumValueId, RelationGroupId, SpecObjectId, SpecRelationId,

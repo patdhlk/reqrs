@@ -13,7 +13,7 @@
 //!   pattern used for XHTML attribute values) so vendor-specific
 //!   tool-extension payloads round-trip without loss.
 //! - [`ObjectLookup`] — pre-built indexes for reference resolution.
-//! - `exceptions` — non-fatal [`SchemaWarning`]s accumulated during parse.
+//! - `exceptions` — non-fatal [`Issue`]s accumulated during parse.
 //!
 //! Note: [`ReqIfBundle`] does NOT derive [`PartialEq`] because
 //! [`ObjectLookup`] contains [`std::sync::Arc`] values that compare by
@@ -22,7 +22,7 @@
 //! `==`; tests that need it should compare individual fields (the model
 //! payload deriveds `PartialEq` field-by-field).
 
-use crate::error::SchemaWarning;
+use crate::error::Issue;
 use crate::ids::{SpecObjectId, SpecTypeId};
 use crate::model::{
     CoreContent, NamespaceInfo, ObjectLookup, ReqIfHeader, SpecHierarchyIter, SpecObject,
@@ -71,7 +71,7 @@ pub struct ReqIfBundle {
     pub core_content: Option<CoreContent>,
     pub tool_extensions: ToolExtensions,
     pub lookup: ObjectLookup,
-    pub exceptions: Vec<SchemaWarning>,
+    pub exceptions: Vec<Issue>,
 }
 
 impl ReqIfBundle {

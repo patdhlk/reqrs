@@ -27,7 +27,7 @@
 //!   with Python's `ReqIFErrorBundle.xml_errors` and gives the CLI a
 //!   stable place to surface future parse-recovery diagnostics.
 //! - [`ValidateReport::schema_errors`] — XSD violations reported by
-//!   `xmllint` plus any [`crate::error::SchemaWarning`]s the parser accumulated on
+//!   `xmllint` plus any [`crate::error::Issue`]s the parser accumulated on
 //!   [`ReqIfBundle::exceptions`].
 //! - [`ValidateReport::semantic_warnings`] — everything else: duplicate
 //!   IDENTIFIERs, dangling refs, missing XML declaration, non-UTF-8
@@ -91,7 +91,7 @@ pub struct ValidateReport {
     /// for future parse-recovery diagnostics for parity with Python.
     pub xml_errors: Vec<String>,
     /// Schema-level errors — XSD violations from `xmllint` plus the
-    /// [`crate::error::SchemaWarning`]s surfaced via
+    /// [`crate::error::Issue`]s surfaced via
     /// [`ReqIfBundle::exceptions`] during parse.
     pub schema_errors: Vec<String>,
     /// Semantic warnings — dangling refs, duplicate IDENTIFIERs, missing
@@ -294,9 +294,9 @@ fn check_xml_prologue(bundle: &ReqIfBundle, report: &mut ValidateReport) {
     }
 }
 
-/// Forward any [`crate::error::SchemaWarning`]s the parser accumulated
+/// Forward any [`crate::error::Issue`]s the parser accumulated
 /// during the most recent parse onto the schema-error tier. The
-/// `SchemaWarning` Display already formats as `"<message> (while <context>)"`.
+/// `Issue` Display already formats as `"<message> (while <context>)"`.
 fn surface_parse_exceptions(bundle: &ReqIfBundle, report: &mut ValidateReport) {
     for w in &bundle.exceptions {
         report.schema_errors.push(w.to_string());

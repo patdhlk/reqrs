@@ -15,9 +15,9 @@
 //!   presence, form (self-closed vs empty open/close), and — when non-empty —
 //!   the verbatim inner XML bytes for byte-exact round-trip.
 //!
-//! Unknown elements are skipped with a [`SchemaWarning`] (Python behaviour).
+//! Unknown elements are skipped with an [`Issue`] (Python behaviour).
 
-use crate::error::{ReqIfError, SchemaWarning};
+use crate::error::{Issue, IssueKind, Location, ReqIfError};
 use crate::model::{
     CoreContent, NamespaceInfo, ObjectLookup, ReqIfBundle, ReqIfContent, ReqIfHeader,
     ToolExtensions,
@@ -61,7 +61,7 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
     let mut header: Option<ReqIfHeader> = None;
     let mut core_content: Option<CoreContent> = None;
     let mut tool_extensions = ToolExtensions::Absent;
-    let mut exceptions: Vec<SchemaWarning> = Vec::new();
+    let mut exceptions: Vec<Issue> = Vec::new();
 
     loop {
         match r.read_event()? {
@@ -108,20 +108,24 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
                         };
                     }
                     _ => {
+                        let tag = String::from_utf8_lossy(&name).into_owned();
+                        let owned = s.into_owned();
+                        let byte_offset = r.buffer_position() as u64;
                         exceptions.push(
-                            SchemaWarning::new(format!(
-                                "unknown element <{}> inside <REQ-IF>",
-                                String::from_utf8_lossy(&name)
-                            ))
+                            Issue::new(IssueKind::UnknownElement {
+                                tag,
+                                parent: "REQ-IF".into(),
+                            })
+                            .with_location(Location::Xml { byte_offset })
                             .with_context("parsing REQ-IF root"),
                         );
-                        let owned = s.into_owned();
                         r.skip_to_end(&owned)?;
                     }
                 }
             }
             Event::Empty(s) => {
                 let name = s.name().as_ref().to_vec();
+                drop(s);
                 match name.as_slice() {
                     b"TOOL-EXTENSIONS" => {
                         tool_extensions = ToolExtensions::SelfClosed;
@@ -132,19 +136,25 @@ pub(crate) fn parse_bundle(bytes: &[u8]) -> Result<ReqIfBundle, ReqIfError> {
                         });
                     }
                     b"THE-HEADER" => {
+                        let byte_offset = r.buffer_position() as u64;
                         exceptions.push(
-                            SchemaWarning::new(
-                                "<THE-HEADER/> is self-closed; expected `<REQ-IF-HEADER>` child",
-                            )
+                            Issue::new(IssueKind::ExpectedNonEmptyElement {
+                                tag: "THE-HEADER".into(),
+                                parent: "REQ-IF".into(),
+                            })
+                            .with_location(Location::Xml { byte_offset })
                             .with_context("parsing REQ-IF root"),
                         );
                     }
                     _ => {
+                        let tag = String::from_utf8_lossy(&name).into_owned();
+                        let byte_offset = r.buffer_position() as u64;
                         exceptions.push(
-                            SchemaWarning::new(format!(
-                                "unknown empty element <{}> inside <REQ-IF>",
-                                String::from_utf8_lossy(&name)
-                            ))
+                            Issue::new(IssueKind::UnknownElement {
+                                tag,
+                                parent: "REQ-IF".into(),
+                            })
+                            .with_location(Location::Xml { byte_offset })
                             .with_context("parsing REQ-IF root"),
                         );
                     }
@@ -294,7 +304,7 @@ fn harvest_namespace_info(start: &BytesStart<'_>) -> NamespaceInfo {
 fn parse_core_content(
     r: &mut ReqIfReader<'_>,
     core_content_start: &BytesStart<'_>,
-    exceptions: &mut Vec<SchemaWarning>,
+    exceptions: &mut Vec<Issue>,
 ) -> Result<CoreContent, ReqIfError> {
     let mut req_if_content: Option<ReqIfContent> = None;
 
@@ -328,7 +338,7 @@ fn parse_core_content(
 fn parse_req_if_content(
     r: &mut ReqIfReader<'_>,
     req_if_content_start: &BytesStart<'_>,
-    exceptions: &mut Vec<SchemaWarning>,
+    exceptions: &mut Vec<Issue>,
 ) -> Result<ReqIfContent, ReqIfError> {
     let mut content = ReqIfContent::default();
 
@@ -375,11 +385,14 @@ fn parse_req_if_content(
                         content.relation_groups_trailing_comments = trailing;
                     }
                     _ => {
+                        let tag = String::from_utf8_lossy(&name).into_owned();
+                        let byte_offset = r.buffer_position() as u64;
                         exceptions.push(
-                            SchemaWarning::new(format!(
-                                "unknown element <{}> inside <REQ-IF-CONTENT>",
-                                String::from_utf8_lossy(&name)
-                            ))
+                            Issue::new(IssueKind::UnknownElement {
+                                tag,
+                                parent: "REQ-IF-CONTENT".into(),
+                            })
+                            .with_location(Location::Xml { byte_offset })
                             .with_context("parsing REQ-IF-CONTENT"),
                         );
                         r.skip_to_end(&owned)?;
@@ -388,6 +401,7 @@ fn parse_req_if_content(
             }
             Event::Empty(s) => {
                 let name = s.name().as_ref().to_vec();
+                drop(s);
                 match name.as_slice() {
                     b"DATATYPES" => content.data_types = Some(Vec::new()),
                     b"SPEC-TYPES" => content.spec_types = Some(Vec::new()),
@@ -396,11 +410,14 @@ fn parse_req_if_content(
                     b"SPECIFICATIONS" => content.specifications = Some(Vec::new()),
                     b"SPEC-RELATION-GROUPS" => content.relation_groups = Some(Vec::new()),
                     _ => {
+                        let tag = String::from_utf8_lossy(&name).into_owned();
+                        let byte_offset = r.buffer_position() as u64;
                         exceptions.push(
-                            SchemaWarning::new(format!(
-                                "unknown empty element <{}> inside <REQ-IF-CONTENT>",
-                                String::from_utf8_lossy(&name)
-                            ))
+                            Issue::new(IssueKind::UnknownElement {
+                                tag,
+                                parent: "REQ-IF-CONTENT".into(),
+                            })
+                            .with_location(Location::Xml { byte_offset })
                             .with_context("parsing REQ-IF-CONTENT"),
                         );
                     }
