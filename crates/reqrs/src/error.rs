@@ -65,10 +65,7 @@ pub enum Location {
 
     /// A specific need (spec object, spec type, data type, …) by its
     /// IDENTIFIER, optionally narrowed to a named field within the need.
-    Need {
-        id: String,
-        field: Option<String>,
-    },
+    Need { id: String, field: Option<String> },
 
     /// A path through the specification hierarchy, expressed as a sequence
     /// of node identifiers from the root specification down to the target.
