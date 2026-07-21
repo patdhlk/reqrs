@@ -106,6 +106,58 @@ fn full_pipeline_round_trip_with_datatype_and_spec_type_and_spec_object() {
     assert_eq!(out, src);
 }
 
+/// Escaped control whitespace inside attribute values (`&#10;`, `&#9;`,
+/// `&#13;`) must round-trip byte-exact. Real exports (IBM Engineering via
+/// requisis ReqIF-Manager) carry multi-line `THE-VALUE` / `DESC` attributes
+/// this way; writing the decoded characters back literally would lose them —
+/// XML attribute-value normalization folds literal #x9/#xA/#xD to spaces on
+/// the next conforming parse.
+#[test]
+fn escaped_newlines_in_attribute_values_round_trip() {
+    let src = r#"<?xml version="1.0" encoding="UTF-8"?>
+<REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd">
+  <CORE-CONTENT>
+    <REQ-IF-CONTENT>
+      <SPEC-TYPES>
+        <SPEC-OBJECT-TYPE DESC="first line&#10;second line" IDENTIFIER="SOT-1" LONG-NAME="Info"/>
+      </SPEC-TYPES>
+      <SPEC-OBJECTS>
+        <SPEC-OBJECT IDENTIFIER="SO-1">
+          <TYPE>
+            <SPEC-OBJECT-TYPE-REF>SOT-1</SPEC-OBJECT-TYPE-REF>
+          </TYPE>
+          <VALUES>
+            <ATTRIBUTE-VALUE-STRING THE-VALUE="bullet one&#10;bullet two&#9;indented&#13;cr">
+              <DEFINITION>
+                <ATTRIBUTE-DEFINITION-STRING-REF>AD-1</ATTRIBUTE-DEFINITION-STRING-REF>
+              </DEFINITION>
+            </ATTRIBUTE-VALUE-STRING>
+          </VALUES>
+        </SPEC-OBJECT>
+      </SPEC-OBJECTS>
+    </REQ-IF-CONTENT>
+  </CORE-CONTENT>
+</REQ-IF>
+"#;
+    let bundle = ReqIfParser::parse_str(src).unwrap();
+
+    // The parser must decode the references into real control characters.
+    let content = bundle
+        .core_content
+        .as_ref()
+        .and_then(|cc| cc.req_if_content.as_ref())
+        .expect("REQ-IF-CONTENT must be present");
+    use reqrs::model::SpecType;
+    let desc = match &content.spec_types.as_ref().unwrap()[0] {
+        SpecType::SpecObject(t) => t.common.description.clone(),
+        _ => panic!("expected SpecObject variant"),
+    };
+    assert_eq!(desc.as_deref(), Some("first line\nsecond line"));
+
+    let out = ReqIfUnparser::unparse(&bundle, FormatMode::Passthrough).unwrap();
+    assert_eq!(out, src);
+}
+
 /// Non-empty `<TOOL-EXTENSIONS>` body must round-trip verbatim. Vendor tools
 /// (Polarion, Doors) emit opaque XML payloads here; we capture the inner
 /// bytes via `capture_inner_raw` and splice them back unchanged on unparse —

@@ -18,6 +18,13 @@ pub(crate) fn escape_attr(out: &mut String, s: &str) {
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
+            // Attribute-value normalization (XML 1.0 §3.3.3) folds literal
+            // #x9/#xA/#xD to spaces on re-parse, so they only survive as
+            // character references — the decimal form lxml emits and real
+            // ReqIF exports (IBM Engineering / requisis) carry.
+            '\t' => out.push_str("&#9;"),
+            '\n' => out.push_str("&#10;"),
+            '\r' => out.push_str("&#13;"),
             // XML 1.0 allows literal apostrophes; Python lib uses &apos; only in some
             // helpers — mirror lxml.etree.tostring which leaves them literal.
             _ => out.push(c),
@@ -40,6 +47,9 @@ pub(crate) fn escape_text(out: &mut String, s: &str) {
         match c {
             '&' => out.push_str("&amp;"),
             '<' => out.push_str("&lt;"),
+            // End-of-line handling (XML 1.0 §2.11) folds a literal #xD to
+            // #xA on re-parse; only the character-reference form survives.
+            '\r' => out.push_str("&#13;"),
             _ => out.push(c),
         }
     }
@@ -151,6 +161,28 @@ mod tests {
         let mut attrs = vec![("DESC", "a < b & \"c\"".to_string())];
         write_self_closing(&mut out, "", "T", &mut attrs).unwrap();
         assert_eq!(out, "<T DESC=\"a &lt; b &amp; &quot;c&quot;\"/>\n");
+    }
+
+    #[test]
+    fn control_whitespace_in_attributes_is_escaped_as_char_refs() {
+        // XML attribute-value normalization (XML 1.0 §3.3.3) turns literal
+        // #x9/#xA/#xD in attribute values into spaces on every conforming
+        // re-parse. To survive round-trip they must be written as character
+        // references — the same form lxml emits and the form real ReqIF
+        // exports (IBM Engineering / requisis ReqIF-Manager) use.
+        let mut out = String::new();
+        escape_attr(&mut out, "line1\nline2\ttab\rcr");
+        assert_eq!(out, "line1&#10;line2&#9;tab&#13;cr");
+    }
+
+    #[test]
+    fn escape_text_writes_carriage_return_as_char_ref() {
+        // End-of-line handling (XML 1.0 §2.11) folds a literal #xD in text
+        // content into #xA on re-parse; only the &#13; form survives.
+        // Literal newlines and tabs in text content are untouched.
+        let mut out = String::new();
+        escape_text(&mut out, "a\rb\nc\td");
+        assert_eq!(out, "a&#13;b\nc\td");
     }
 
     #[test]
