@@ -1,6 +1,6 @@
 [package]
 name = "reqrs-cli"
-version = "0.2.1"
+version = "0.2.2"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -15,7 +15,7 @@ name = "reqrs"
 path = "src/main.rs"
 
 [dependencies]
-reqrs = { path = "../reqrs", version = "0.2.1" }
+reqrs = { path = "../reqrs", version = "0.2.2" }
 clap.workspace = true
 anyhow.workspace = true
 
