@@ -19,16 +19,31 @@ library and aims at byte-identical round-trip on real-world ReqIF files.
 ### CLI binary
 
 ```bash
-cargo install --path crates/reqrs-cli
+cargo install reqrs-cli
 ```
 
-(Once published: `cargo install reqrs-cli`.)
+Or download a prebuilt binary from the
+[latest release](https://github.com/patdhlk/reqrs/releases/latest). Builds are
+published for x86_64 and aarch64 Linux (static musl), x86_64 and aarch64 macOS,
+and x86_64 Windows. Each release includes a `SHA256SUMS` file.
+
+```bash
+# Linux x86_64 example
+curl -LO https://github.com/patdhlk/reqrs/releases/latest/download/reqrs-v0.2.1-x86_64-unknown-linux-musl.tar.gz
+tar xzf reqrs-v0.2.1-x86_64-unknown-linux-musl.tar.gz
+```
+
+To build from a checkout instead:
+
+```bash
+cargo install --path crates/reqrs-cli
+```
 
 ### Library
 
 ```toml
 [dependencies]
-reqrs = "0.1"
+reqrs = "0.2"
 ```
 
 ## CLI usage

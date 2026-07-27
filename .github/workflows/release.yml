@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Verify tag matches manifests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      publish_lib: ${{ steps.check.outputs.publish_lib }}
+      publish_cli: ${{ steps.check.outputs.publish_cli }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check tag against manifests
+        id: check
+        run: ./scripts/release-guard.sh "${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: cargo fmt + clippy + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install xmllint (needed for validate --use-reqif-schema)
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --workspace
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: guard
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release -p reqrs-cli --target ${{ matrix.target }}
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          staging="reqrs-v${VERSION}-${{ matrix.target }}"
+          mkdir -p "$staging"
+          cp "target/${{ matrix.target }}/release/reqrs" "$staging/"
+          cp README.md LICENSE "$staging/"
+          tar czf "${staging}.tar.gz" "$staging"
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          staging="reqrs-v${VERSION}-${{ matrix.target }}"
+          mkdir -p "$staging"
+          cp "target/${{ matrix.target }}/release/reqrs.exe" "$staging/"
+          cp README.md LICENSE "$staging/"
+          7z a "${staging}.zip" "$staging"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reqrs-v${{ needs.guard.outputs.version }}-${{ matrix.target }}
+          path: reqrs-v${{ needs.guard.outputs.version }}-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish to crates.io
+    needs: [guard, test, build]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Order matters: reqrs-cli's verify step compiles against the registry
+      # copy of reqrs. cargo blocks until each publish is index-visible, so no
+      # manual wait is needed between the two.
+      - name: Publish reqrs
+        if: needs.guard.outputs.publish_lib == 'true'
+        run: cargo publish -p reqrs
+
+      - name: Publish reqrs-cli
+        if: needs.guard.outputs.publish_cli == 'true'
+        run: cargo publish -p reqrs-cli
+
+  release:
+    name: Create GitHub release
+    needs: [guard, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum ./* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*
