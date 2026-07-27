@@ -31,8 +31,55 @@ verify_versions() {
   return "$rc"
 }
 
+# crate_published CRATE VERSION -> 0 when that version exists on crates.io.
+crate_published() {
+  local crate=$1 version=$2 code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' \
+    -H 'User-Agent: reqrs-release-workflow (github.com/patdhlk/reqrs)' \
+    "https://crates.io/api/v1/crates/${crate}/${version}")
+  [[ "$code" == "200" ]]
+}
+
+# emit_publish_flags TAG -> writes publish_lib= / publish_cli= to stdout.
+emit_publish_flags() {
+  local tag=$1
+
+  if crate_published "reqrs" "$tag"; then
+    echo "reqrs $tag is already on crates.io - skipping" >&2
+    echo "publish_lib=false"
+  else
+    echo "publish_lib=true"
+  fi
+
+  if crate_published "reqrs-cli" "$tag"; then
+    echo "reqrs-cli $tag is already on crates.io - skipping" >&2
+    echo "publish_cli=false"
+  else
+    echo "publish_cli=true"
+  fi
+}
+
+main() {
+  local tag=${1:?usage: release-guard.sh <version>}
+  local meta lib cli req
+
+  meta=$(cargo metadata --no-deps --format-version 1)
+  lib=$(jq -r '.packages[] | select(.name=="reqrs") | .version' <<<"$meta")
+  cli=$(jq -r '.packages[] | select(.name=="reqrs-cli") | .version' <<<"$meta")
+  req=$(jq -r '.packages[]
+                 | select(.name=="reqrs-cli")
+                 | .dependencies[]
+                 | select(.name=="reqrs")
+                 | .req' <<<"$meta")
+
+  verify_versions "$tag" "$lib" "$cli" "$req"
+  echo "tag $tag matches both manifests and the dependency pin" >&2
+
+  echo "version=$tag"
+  emit_publish_flags "$tag"
+}
+
 # Only run main() when executed directly, so tests can source this file.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-  echo "main() not implemented yet" >&2
-  exit 1
+  main "$@"
 fi

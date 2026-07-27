@@ -41,3 +41,28 @@ setup() {
   run verify_versions "0.2.0" "0.1.0" "0.1.0" "^0.1.0"
   [ "$status" -eq 1 ]
 }
+
+@test "emit_publish_flags marks both crates for publishing when absent" {
+  crate_published() { return 1; }
+  run emit_publish_flags "0.3.0"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"publish_lib=true"* ]]
+  [[ "$output" == *"publish_cli=true"* ]]
+}
+
+@test "emit_publish_flags skips both crates when already published" {
+  crate_published() { return 0; }
+  run emit_publish_flags "0.2.1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"publish_lib=false"* ]]
+  [[ "$output" == *"publish_cli=false"* ]]
+}
+
+@test "emit_publish_flags handles a half-published release" {
+  # reqrs uploaded, reqrs-cli failed - re-running must finish the job.
+  crate_published() { [[ "$1" == "reqrs" ]]; }
+  run emit_publish_flags "0.3.0"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"publish_lib=false"* ]]
+  [[ "$output" == *"publish_cli=true"* ]]
+}
