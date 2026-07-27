@@ -29,8 +29,9 @@ and x86_64 Windows. Each release includes a `SHA256SUMS` file.
 
 ```bash
 # Linux x86_64 example
-curl -LO https://github.com/patdhlk/reqrs/releases/latest/download/reqrs-v0.2.1-x86_64-unknown-linux-musl.tar.gz
-tar xzf reqrs-v0.2.1-x86_64-unknown-linux-musl.tar.gz
+VERSION=0.2.2
+curl -LO "https://github.com/patdhlk/reqrs/releases/download/v${VERSION}/reqrs-v${VERSION}-x86_64-unknown-linux-musl.tar.gz"
+tar xzf "reqrs-v${VERSION}-x86_64-unknown-linux-musl.tar.gz"
 ```
 
 To build from a checkout instead:

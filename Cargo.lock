@@ -644,7 +644,7 @@ checksum = "6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f"
 
 [[package]]
 name = "reqrs"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "include_dir",
@@ -659,7 +659,7 @@ dependencies = [
 
 [[package]]
 name = "reqrs-cli"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
