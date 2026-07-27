@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Verify tag matches manifests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      publish_lib: ${{ steps.check.outputs.publish_lib }}
+      publish_cli: ${{ steps.check.outputs.publish_cli }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check tag against manifests
+        id: check
+        run: ./scripts/release-guard.sh "${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: cargo fmt + clippy + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install xmllint (needed for validate --use-reqif-schema)
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --workspace
