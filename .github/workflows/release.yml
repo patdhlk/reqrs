@@ -107,3 +107,25 @@ jobs:
           name: reqrs-v${{ needs.guard.outputs.version }}-${{ matrix.target }}
           path: reqrs-v${{ needs.guard.outputs.version }}-${{ matrix.target }}.${{ matrix.archive }}
           if-no-files-found: error
+
+  publish:
+    name: Publish to crates.io
+    needs: [guard, test, build]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Order matters: reqrs-cli's verify step compiles against the registry
+      # copy of reqrs. cargo blocks until each publish is index-visible, so no
+      # manual wait is needed between the two.
+      - name: Publish reqrs
+        if: needs.guard.outputs.publish_lib == 'true'
+        run: cargo publish -p reqrs
+
+      - name: Publish reqrs-cli
+        if: needs.guard.outputs.publish_cli == 'true'
+        run: cargo publish -p reqrs-cli
